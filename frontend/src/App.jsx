@@ -2,6 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+const getFallbackMarkerPosition = (index, total) => {
+  const columns = total > 9 ? 4 : total > 4 ? 3 : 2;
+  const rows = Math.max(1, Math.ceil(total / columns));
+  const columnIndex = index % columns;
+  const rowIndex = Math.floor(index / columns);
+
+  return {
+    left: 18 + ((columnIndex + 0.5) * 64) / columns,
+    top: 18 + ((rowIndex + 0.5) * 58) / rows,
+  };
+};
+
 const createPlaceholderDataUri = (label, color) => {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
@@ -60,10 +72,12 @@ function LazyImage({ src, alt, fallbackLabel, badgeColor, className }) {
 }
 
 function App() {
-  const [config, setConfig] = useState({ puntos: [], checks: [] });
+  const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     turno: 'A',
+    linea: '',
+    maquinaId: '',
     opNumero: '',
     firmaOperador: '',
     firmaSupervisor: '',
@@ -84,6 +98,20 @@ function App() {
 
         const payload = await response.json();
         setConfig(payload);
+        setMetadata((current) => {
+          const lineas = payload.lineas || [];
+          const nextLinea = lineas.includes(current.linea) ? current.linea : (lineas[0] || '');
+          const maquinasLinea = (payload.maquinas || []).filter((machine) => machine.linea === nextLinea);
+          const nextMaquinaId = maquinasLinea.some((machine) => String(machine.id) === current.maquinaId)
+            ? current.maquinaId
+            : String(maquinasLinea[0]?.id || '');
+
+          return {
+            ...current,
+            linea: nextLinea,
+            maquinaId: nextMaquinaId,
+          };
+        });
         setStatus((current) => ({ ...current, loading: false }));
       } catch (error) {
         if (error.name !== 'AbortError') {
@@ -97,8 +125,39 @@ function App() {
     return () => controller.abort();
   }, []);
 
+  const machinesForSelectedLine = useMemo(
+    () => config.maquinas.filter((machine) => machine.linea === metadata.linea),
+    [config.maquinas, metadata.linea],
+  );
+
   useEffect(() => {
-    if (!config.puntos.length || !config.checks.length) {
+    if (!machinesForSelectedLine.length) {
+      return;
+    }
+
+    const hasSelectedMachine = machinesForSelectedLine.some((machine) => String(machine.id) === metadata.maquinaId);
+
+    if (!hasSelectedMachine) {
+      setMetadata((current) => ({
+        ...current,
+        maquinaId: String(machinesForSelectedLine[0].id),
+      }));
+    }
+  }, [machinesForSelectedLine, metadata.maquinaId]);
+
+  const selectedMachine = useMemo(
+    () => config.maquinas.find((machine) => String(machine.id) === metadata.maquinaId) || null,
+    [config.maquinas, metadata.maquinaId],
+  );
+
+  const filteredPoints = useMemo(
+    () => config.puntos.filter((punto) => String(punto.maquina_id) === metadata.maquinaId),
+    [config.puntos, metadata.maquinaId],
+  );
+
+  useEffect(() => {
+    if (!filteredPoints.length || !config.checks.length || !metadata.maquinaId) {
+      setCheckState({});
       return;
     }
 
@@ -106,7 +165,15 @@ function App() {
 
     const loadExistingChecklist = async () => {
       try {
-        const search = new URLSearchParams({ fecha: metadata.fecha, turno: metadata.turno });
+        setCheckState({});
+        setMetadata((current) => ({
+          ...current,
+          opNumero: '',
+          firmaOperador: '',
+          firmaSupervisor: '',
+        }));
+
+        const search = new URLSearchParams({ fecha: metadata.fecha, turno: metadata.turno, maquinaId: metadata.maquinaId });
         const response = await fetch(`${API_URL}/api/checklist?${search.toString()}`, { signal: controller.signal });
 
         if (!response.ok) {
@@ -137,7 +204,7 @@ function App() {
     loadExistingChecklist();
 
     return () => controller.abort();
-  }, [config.checks, config.puntos, metadata.fecha, metadata.turno]);
+  }, [config.checks, filteredPoints, metadata.fecha, metadata.turno, metadata.maquinaId]);
 
   const groupedChecks = useMemo(() => {
     const parada = config.checks.filter((check) => check.grupo === 'parada');
@@ -162,10 +229,20 @@ function App() {
       return;
     }
 
+    if (!metadata.maquinaId) {
+      setStatus((current) => ({ ...current, error: 'Selecciona una maquina antes de guardar' }));
+      return;
+    }
+
+    if (!filteredPoints.length) {
+      setStatus((current) => ({ ...current, error: 'La maquina seleccionada no tiene puntos cargados' }));
+      return;
+    }
+
     setStatus({ loading: false, saving: true, message: '', error: '' });
 
     try {
-      const rows = config.puntos.flatMap((punto) =>
+      const rows = filteredPoints.flatMap((punto) =>
         config.checks.map((check) => ({
           puntoId: punto.id,
           checkId: check.id,
@@ -178,6 +255,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...metadata,
+          maquinaId: Number(metadata.maquinaId),
           rows,
         }),
       });
@@ -216,9 +294,44 @@ function App() {
           </div>
           <div className="border-t border-slate-500 px-4 py-1 text-center text-xs font-bold uppercase md:text-sm">Packaging</div>
           <div className="border-t border-slate-500 bg-softBlue px-4 py-2 text-center text-sm font-black uppercase md:text-base">
-            Despaletizadora linea 1
+            {selectedMachine?.nombre || 'Selecciona una maquina'}
           </div>
         </header>
+
+        <section className="border-b border-slate-500 bg-slate-50 px-4 py-4">
+          <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Linea
+              <select
+                name="linea"
+                value={metadata.linea}
+                onChange={handleMetadataChange}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+              >
+                {config.lineas.map((linea) => (
+                  <option key={linea} value={linea}>{linea}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Maquina
+              <select
+                name="maquinaId"
+                value={metadata.maquinaId}
+                onChange={handleMetadataChange}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+              >
+                {machinesForSelectedLine.map((machine) => (
+                  <option key={machine.id} value={machine.id}>{machine.nombre}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="mt-3 text-xs font-medium text-slate-600">
+            Los puntos de aislamiento se cargan desde la lista maestra de seguridades segun la linea y la maquina seleccionadas.
+          </p>
+        </section>
 
         <section className="overflow-x-auto border-b-2 border-slate-500">
           <table className="min-w-full border-collapse text-[11px] md:text-sm">
@@ -246,7 +359,7 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {config.puntos.map((punto) => (
+              {filteredPoints.map((punto) => (
                 <tr key={punto.id} className="bg-white">
                   <td className="border border-slate-500 px-1 py-2">
                     <span
@@ -276,10 +389,10 @@ function App() {
                   })}
                 </tr>
               ))}
-              {!config.puntos.length && !status.loading && (
+              {!filteredPoints.length && !status.loading && (
                 <tr>
                   <td colSpan={2 + config.checks.length} className="border border-slate-500 px-3 py-6 text-center text-slate-500">
-                    No hay datos semilla cargados en la base.
+                    No hay puntos cargados para la maquina seleccionada.
                   </td>
                 </tr>
               )}
@@ -362,11 +475,11 @@ function App() {
             Packaging
           </div>
           <div className="border-b border-slate-500 bg-softBlue px-4 py-2 text-center text-sm font-black uppercase md:text-base">
-            Despaletizadora linea 1
+            {selectedMachine?.nombre || 'Selecciona una maquina'}
           </div>
           <div className="grid gap-5 p-4 lg:grid-cols-[1.7fr_1fr]">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {config.puntos.map((punto) => (
+              {filteredPoints.map((punto) => (
                 <article key={`photo-${punto.id}`} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                   <LazyImage
                     src={punto.foto_url}
@@ -398,19 +511,23 @@ function App() {
                 <div className="absolute left-[37%] top-[6%] h-[84%] w-[10%] rounded-full border border-slate-400 bg-slate-100/90" />
                 <div className="absolute left-[56%] top-[18%] h-[64%] w-[11%] rounded-full border border-slate-400 bg-slate-100/90" />
                 <div className="absolute left-[74%] top-[22%] h-[52%] w-[9%] rounded-full border border-slate-400 bg-slate-100/90" />
-                {config.puntos.map((punto) => (
-                  <span
-                    key={`marker-${punto.id}`}
-                    className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1 text-xs font-black uppercase text-white shadow-lg"
-                    style={{
-                      left: `${punto.blueprint_x || 50}%`,
-                      top: `${punto.blueprint_y || 50}%`,
-                      backgroundColor: punto.color_hex,
-                    }}
-                  >
-                    {punto.id_visual}
-                  </span>
-                ))}
+                {filteredPoints.map((punto, index) => {
+                  const fallbackPosition = getFallbackMarkerPosition(index, filteredPoints.length);
+
+                  return (
+                    <span
+                      key={`marker-${punto.id}`}
+                      className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1 text-xs font-black uppercase text-white shadow-lg"
+                      style={{
+                        left: `${punto.blueprint_x ?? fallbackPosition.left}%`,
+                        top: `${punto.blueprint_y ?? fallbackPosition.top}%`,
+                        backgroundColor: punto.color_hex,
+                      }}
+                    >
+                      {punto.id_visual}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -425,10 +542,10 @@ function App() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={status.loading || status.saving || !config.puntos.length}
+            disabled={status.loading || status.saving || !filteredPoints.length || !metadata.maquinaId}
             className="inline-flex items-center justify-center rounded-full bg-safety px-6 py-3 text-sm font-black uppercase tracking-wide text-white transition hover:bg-safetyDark disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            {status.saving ? 'Guardando...' : 'Guardar jornada'}
+            {status.saving ? 'Guardando...' : 'Subir a base de datos'}
           </button>
         </footer>
       </div>
