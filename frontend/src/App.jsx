@@ -142,7 +142,8 @@ function App() {
   const groupedChecks = useMemo(() => {
     const parada = config.checks.filter((check) => check.grupo === 'parada');
     const arranque = config.checks.filter((check) => check.grupo === 'arranque');
-    return { parada, arranque };
+    const breakdown = config.checks.filter((check) => check.grupo === 'breakdown');
+    return { parada, arranque, breakdown };
   }, [config.checks]);
 
   const toggleCheck = (puntoId, checkId) => {
@@ -227,6 +228,7 @@ function App() {
                 <th rowSpan="2" className="min-w-64 border border-slate-500 px-2 py-3">Descripcion del punto de aislamiento</th>
                 <th colSpan={groupedChecks.parada.length} className="border border-slate-500 px-2 py-3">Paradas de produccion</th>
                 <th colSpan={groupedChecks.arranque.length} className="border border-slate-500 px-2 py-3">Arranque</th>
+                <th colSpan={groupedChecks.breakdown.length} className="border border-slate-500 px-2 py-3">BrakeDown o CIP</th>
               </tr>
               <tr className="bg-slate-50 text-center font-semibold">
                 {groupedChecks.parada.map((check) => (
@@ -237,6 +239,9 @@ function App() {
                 ))}
                 {groupedChecks.arranque.map((check) => (
                   <th key={check.id} className="min-w-28 border border-slate-500 px-2 py-2">{check.descripcion_corta}</th>
+                ))}
+                {groupedChecks.breakdown.map((check) => (
+                  <th key={check.id} className="min-w-32 border border-slate-500 px-2 py-2">{check.descripcion_corta}</th>
                 ))}
               </tr>
             </thead>
@@ -273,7 +278,7 @@ function App() {
               ))}
               {!config.puntos.length && !status.loading && (
                 <tr>
-                  <td colSpan="6" className="border border-slate-500 px-3 py-6 text-center text-slate-500">
+                  <td colSpan={2 + config.checks.length} className="border border-slate-500 px-3 py-6 text-center text-slate-500">
                     No hay datos semilla cargados en la base.
                   </td>
                 </tr>

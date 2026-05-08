@@ -17,5 +17,6 @@ VALUES
     ('Modulacion Parada > 10 min Danos, EFC, CIP', 1, 'parada', 'Modulacion'),
     ('Fin de Produccion', 2, 'parada', 'Fin de Produccion'),
     ('Mantenimiento o Aseo', 3, 'parada', 'Mantenimiento o Aseo'),
-    ('Arranque', 4, 'arranque', 'Arranque')
+    ('Arranque', 4, 'arranque', 'Arranque'),
+    ('BrakeDown o CIP', 5, 'breakdown', 'BrakeDown o CIP')
 ON CONFLICT DO NOTHING;
