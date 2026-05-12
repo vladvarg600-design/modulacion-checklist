@@ -73,7 +73,7 @@ app.get('/api/config', async (_request, response) => {
     const [machinesResult, pointsResult, checksResult] = await Promise.all([
       pool.query(
         `
-          SELECT id, nombre, linea, orden
+          SELECT id, nombre, linea, mapa_url, orden
           FROM maquinas
           ORDER BY linea ASC, orden ASC
         `,
@@ -262,6 +262,49 @@ app.post('/api/puntos/:pointId/photo', upload.single('photo'), async (request, r
       ok: true,
       point,
       message: `Imagen actualizada para ${point.id_visual}`,
+    });
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/maquinas/:machineId/map', upload.single('map'), async (request, response) => {
+  const machineId = Number(request.params.machineId);
+
+  if (!Number.isInteger(machineId) || machineId <= 0) {
+    response.status(400).json({ message: 'machineId es obligatorio' });
+    return;
+  }
+
+  if (!request.file) {
+    response.status(400).json({ message: 'Debes seleccionar una imagen de mapa' });
+    return;
+  }
+
+  const dataUri = `data:${request.file.mimetype};base64,${request.file.buffer.toString('base64')}`;
+
+  try {
+    const result = await pool.query(
+      `
+        UPDATE maquinas
+        SET mapa_url = $1
+        WHERE id = $2
+        RETURNING id, nombre, linea, mapa_url
+      `,
+      [dataUri, machineId],
+    );
+
+    const machine = result.rows[0];
+
+    if (!machine) {
+      response.status(404).json({ message: 'No se encontro la maquina seleccionada' });
+      return;
+    }
+
+    response.status(201).json({
+      ok: true,
+      machine,
+      message: `Mapa actualizado para ${machine.nombre}`,
     });
   } catch (error) {
     response.status(500).json({ message: error.message });

@@ -44,6 +44,7 @@ npm run dev
 
 - La seccion del mapa usa carga diferida con `IntersectionObserver`.
 - Las fotos de cada punto pueden cargarse desde la interfaz; el backend las guarda en PostgreSQL dentro de `foto_url`.
+- Cada maquina tambien puede cargar su imagen de mapa; el backend la guarda en `maquinas.mapa_url`.
 - Se aceptan `PNG`, `JPG` y `WebP`, con limite de 4 MB por imagen.
 - Conviene subir las fotos finales y el plano en formato WebP, idealmente por debajo de 200 KB cada una.
 - El backend guarda toda la jornada en una sola transaccion con `INSERT ... ON CONFLICT DO UPDATE`.

@@ -74,6 +74,7 @@ function LazyImage({ src, alt, fallbackLabel, badgeColor, className }) {
 function App() {
   const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
   const [uploadingPointId, setUploadingPointId] = useState(null);
+  const [uploadingMap, setUploadingMap] = useState(false);
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     turno: 'A',
@@ -261,6 +262,45 @@ function App() {
       setStatus((current) => ({ ...current, message: '', error: error.message }));
     } finally {
       setUploadingPointId(null);
+    }
+  };
+
+  const handleMapUpload = async (file) => {
+    if (!file || !metadata.maquinaId) {
+      return;
+    }
+
+    setUploadingMap(true);
+    setStatus((current) => ({ ...current, message: '', error: '' }));
+
+    try {
+      const formData = new FormData();
+      formData.append('map', file);
+
+      const response = await fetch(`${API_URL}/api/maquinas/${metadata.maquinaId}/map`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'No se pudo subir el mapa');
+      }
+
+      setConfig((current) => ({
+        ...current,
+        maquinas: current.maquinas.map((machine) => (
+          machine.id === payload.machine.id
+            ? { ...machine, mapa_url: payload.machine.mapa_url }
+            : machine
+        )),
+      }));
+      setStatus((current) => ({ ...current, message: payload.message, error: '' }));
+    } catch (error) {
+      setStatus((current) => ({ ...current, message: '', error: error.message }));
+    } finally {
+      setUploadingMap(false);
     }
   };
 
@@ -562,13 +602,43 @@ function App() {
                 </article>
               ))}
             </div>
-            <div className="relative min-h-[480px] overflow-hidden rounded-[24px] border border-slate-300 bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] p-4">
+            <div
+              className="relative min-h-[480px] overflow-hidden rounded-[24px] border border-slate-300 bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] p-4"
+              style={selectedMachine?.mapa_url ? {
+                backgroundImage: `linear-gradient(rgba(248,250,252,0.22), rgba(226,232,240,0.30)), url(${selectedMachine.mapa_url})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              } : undefined}
+            >
+              <div className="relative z-10 mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-700">
+                  {selectedMachine?.mapa_url ? 'Mapa cargado para esta maquina' : 'Sube el mapa de esta maquina'}
+                </p>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white/85 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-white">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={uploadingMap || !metadata.maquinaId}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+
+                      if (file) {
+                        handleMapUpload(file);
+                      }
+
+                      event.target.value = '';
+                    }}
+                  />
+                  {uploadingMap ? 'Subiendo mapa...' : 'Subir mapa'}
+                </label>
+              </div>
               <div className="absolute inset-0 opacity-40" style={{
                 backgroundImage:
                   'linear-gradient(90deg, rgba(148,163,184,0.4) 1px, transparent 1px), linear-gradient(rgba(148,163,184,0.4) 1px, transparent 1px)',
                 backgroundSize: '32px 32px',
               }} />
-              <div className="relative h-full rounded-[18px] border border-dashed border-slate-400 bg-white/60">
+              <div className="relative z-10 h-full rounded-[18px] border border-dashed border-slate-400 bg-white/60 backdrop-blur-[1px]">
                 <div className="absolute left-[18%] top-[10%] h-[75%] w-[12%] rounded-full border border-slate-400 bg-slate-100/90" />
                 <div className="absolute left-[37%] top-[6%] h-[84%] w-[10%] rounded-full border border-slate-400 bg-slate-100/90" />
                 <div className="absolute left-[56%] top-[18%] h-[64%] w-[11%] rounded-full border border-slate-400 bg-slate-100/90" />
@@ -591,6 +661,9 @@ function App() {
                   );
                 })}
               </div>
+              <p className="relative z-10 mt-3 text-[11px] font-medium text-slate-600">
+                PNG, JPG o WebP. Maximo 4 MB por mapa.
+              </p>
             </div>
           </div>
         </section>

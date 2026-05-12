@@ -2,9 +2,13 @@ CREATE TABLE IF NOT EXISTS maquinas (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL UNIQUE,
     linea VARCHAR(10) NOT NULL,
+    mapa_url TEXT,
     orden INTEGER NOT NULL,
     UNIQUE (linea, orden)
 );
+
+ALTER TABLE maquinas
+    ADD COLUMN IF NOT EXISTS mapa_url TEXT;
 
 CREATE TABLE IF NOT EXISTS puntos_aislamiento (
     id SERIAL PRIMARY KEY,
