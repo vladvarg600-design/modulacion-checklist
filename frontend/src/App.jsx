@@ -73,6 +73,7 @@ function LazyImage({ src, alt, fallbackLabel, badgeColor, className }) {
 
 function App() {
   const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
+  const [uploadingPointId, setUploadingPointId] = useState(null);
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     turno: 'A',
@@ -221,6 +222,46 @@ function App() {
   const handleMetadataChange = (event) => {
     const { name, value } = event.target;
     setMetadata((current) => ({ ...current, [name]: value }));
+  };
+
+  const handlePhotoUpload = async (pointId, file) => {
+    if (!file || !metadata.maquinaId) {
+      return;
+    }
+
+    setUploadingPointId(pointId);
+    setStatus((current) => ({ ...current, message: '', error: '' }));
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      formData.append('maquinaId', metadata.maquinaId);
+
+      const response = await fetch(`${API_URL}/api/puntos/${pointId}/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'No se pudo subir la imagen');
+      }
+
+      setConfig((current) => ({
+        ...current,
+        puntos: current.puntos.map((punto) => (
+          punto.id === pointId
+            ? { ...punto, foto_url: payload.point.foto_url }
+            : punto
+        )),
+      }));
+      setStatus((current) => ({ ...current, message: payload.message, error: '' }));
+    } catch (error) {
+      setStatus((current) => ({ ...current, message: '', error: error.message }));
+    } finally {
+      setUploadingPointId(null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -496,6 +537,27 @@ function App() {
                       {punto.id_visual}
                     </span>
                     <p className="mt-2 text-sm font-semibold text-slate-700">{punto.descripcion}</p>
+                    <label className="mt-3 inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-100">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        disabled={uploadingPointId === punto.id}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+
+                          if (file) {
+                            handlePhotoUpload(punto.id, file);
+                          }
+
+                          event.target.value = '';
+                        }}
+                      />
+                      {uploadingPointId === punto.id ? 'Subiendo imagen...' : 'Subir imagen'}
+                    </label>
+                    <p className="mt-2 text-[11px] font-medium text-slate-500">
+                      PNG, JPG o WebP. Maximo 4 MB.
+                    </p>
                   </div>
                 </article>
               ))}

@@ -1,12 +1,27 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import multer from 'multer';
 import pg from 'pg';
 
 const { Pool } = pg;
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_request, file, callback) => {
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+    if (!allowedTypes.has(file.mimetype)) {
+      callback(new Error('Solo se permiten imagenes PNG, JPG o WebP'));
+      return;
+    }
+
+    callback(null, true);
+  },
+});
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('render.com')
@@ -20,6 +35,29 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '1mb' }));
+
+app.use((error, _request, response, next) => {
+  if (!error) {
+    next();
+    return;
+  }
+
+  if (error instanceof multer.MulterError) {
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'La imagen supera el limite de 4 MB'
+      : error.message;
+
+    response.status(400).json({ message });
+    return;
+  }
+
+  if (error.message?.includes('Solo se permiten imagenes')) {
+    response.status(400).json({ message: error.message });
+    return;
+  }
+
+  next(error);
+});
 
 app.get('/api/health', async (_request, response) => {
   try {
@@ -183,6 +221,50 @@ app.post('/api/checklist', async (request, response) => {
     response.status(500).json({ message: error.message });
   } finally {
     client.release();
+  }
+});
+
+app.post('/api/puntos/:pointId/photo', upload.single('photo'), async (request, response) => {
+  const pointId = Number(request.params.pointId);
+  const maquinaId = Number(request.body.maquinaId);
+
+  if (!Number.isInteger(pointId) || pointId <= 0 || !Number.isInteger(maquinaId) || maquinaId <= 0) {
+    response.status(400).json({ message: 'pointId y maquinaId son obligatorios' });
+    return;
+  }
+
+  if (!request.file) {
+    response.status(400).json({ message: 'Debes seleccionar una imagen' });
+    return;
+  }
+
+  const dataUri = `data:${request.file.mimetype};base64,${request.file.buffer.toString('base64')}`;
+
+  try {
+    const result = await pool.query(
+      `
+        UPDATE puntos_aislamiento
+        SET foto_url = $1
+        WHERE id = $2 AND maquina_id = $3
+        RETURNING id, maquina_id, id_visual, foto_url
+      `,
+      [dataUri, pointId, maquinaId],
+    );
+
+    const point = result.rows[0];
+
+    if (!point) {
+      response.status(404).json({ message: 'No se encontro el punto para la maquina seleccionada' });
+      return;
+    }
+
+    response.status(201).json({
+      ok: true,
+      point,
+      message: `Imagen actualizada para ${point.id_visual}`,
+    });
+  } catch (error) {
+    response.status(500).json({ message: error.message });
   }
 });
 
