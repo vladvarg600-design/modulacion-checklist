@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS registros_checklist (
     id SERIAL PRIMARY KEY,
     fecha DATE DEFAULT CURRENT_DATE,
     turno VARCHAR(10) NOT NULL,
+    modo VARCHAR(20) NOT NULL DEFAULT 'parada',
     maquina_id INTEGER REFERENCES maquinas(id),
     punto_id INTEGER NOT NULL REFERENCES puntos_aislamiento(id),
     check_id INTEGER NOT NULL REFERENCES tipos_check(id),
@@ -59,11 +60,14 @@ CREATE TABLE IF NOT EXISTS registros_checklist (
     firma_supervisor VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE (fecha, turno, maquina_id, punto_id, check_id)
+    UNIQUE (fecha, turno, modo, maquina_id, punto_id, check_id)
 );
 
 ALTER TABLE registros_checklist
     ADD COLUMN IF NOT EXISTS maquina_id INTEGER REFERENCES maquinas(id);
+
+ALTER TABLE registros_checklist
+    ADD COLUMN IF NOT EXISTS modo VARCHAR(20) NOT NULL DEFAULT 'parada';
 
 ALTER TABLE registros_checklist
     DROP CONSTRAINT IF EXISTS registros_checklist_fecha_turno_punto_id_check_id_key;
@@ -72,13 +76,16 @@ ALTER TABLE registros_checklist
     DROP CONSTRAINT IF EXISTS registros_checklist_fecha_turno_maquina_id_punto_id_check_id_key;
 
 ALTER TABLE registros_checklist
-    ADD CONSTRAINT registros_checklist_fecha_turno_maquina_id_punto_id_check_id_key
-    UNIQUE (fecha, turno, maquina_id, punto_id, check_id);
+    DROP CONSTRAINT IF EXISTS registros_checklist_fecha_turno_modo_maquina_id_punto_id_check_key;
+
+ALTER TABLE registros_checklist
+    ADD CONSTRAINT registros_checklist_fecha_turno_modo_maquina_id_punto_id_check_key
+    UNIQUE (fecha, turno, modo, maquina_id, punto_id, check_id);
 
 DROP INDEX IF EXISTS idx_registros_fecha_turno;
 
 CREATE INDEX IF NOT EXISTS idx_registros_fecha_turno_maquina
-    ON registros_checklist (fecha, turno, maquina_id);
+    ON registros_checklist (fecha, turno, modo, maquina_id);
 
 CREATE INDEX IF NOT EXISTS idx_puntos_maquina_orden
     ON puntos_aislamiento (maquina_id, orden);

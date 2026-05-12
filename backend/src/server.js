@@ -118,11 +118,11 @@ app.get('/api/config', async (_request, response) => {
 });
 
 app.get('/api/checklist', async (request, response) => {
-  const { fecha, turno, maquinaId } = request.query;
+  const { fecha, turno, modo, maquinaId } = request.query;
   const resolvedMachineId = Number(maquinaId);
 
-  if (!fecha || !turno || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0) {
-    response.status(400).json({ message: 'fecha, turno y maquinaId son obligatorios' });
+  if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0) {
+    response.status(400).json({ message: 'fecha, turno, modo y maquinaId son obligatorios' });
     return;
   }
 
@@ -132,6 +132,7 @@ app.get('/api/checklist', async (request, response) => {
         SELECT
           rc.fecha,
           rc.turno,
+          rc.modo,
           rc.maquina_id,
           rc.punto_id,
           rc.check_id,
@@ -144,10 +145,10 @@ app.get('/api/checklist', async (request, response) => {
         FROM registros_checklist rc
         JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
         JOIN tipos_check tc ON tc.id = rc.check_id
-        WHERE rc.fecha = $1 AND rc.turno = $2 AND rc.maquina_id = $3
+        WHERE rc.fecha = $1 AND rc.turno = $2 AND rc.modo = $3 AND rc.maquina_id = $4
         ORDER BY pa.orden ASC, tc.orden ASC
       `,
-      [fecha, turno, resolvedMachineId],
+      [fecha, turno, modo, resolvedMachineId],
     );
 
     const metadataSource = result.rows[0] || null;
@@ -155,6 +156,7 @@ app.get('/api/checklist', async (request, response) => {
     response.json({
       fecha,
       turno,
+      modo,
       metadata: metadataSource
         ? {
             opNumero: metadataSource.op_numero || '',
@@ -174,11 +176,11 @@ app.get('/api/checklist', async (request, response) => {
 });
 
 app.post('/api/checklist', async (request, response) => {
-  const { fecha, turno, maquinaId, opNumero, firmaOperador, firmaSupervisor, rows } = request.body;
+  const { fecha, turno, modo, maquinaId, opNumero, firmaOperador, firmaSupervisor, rows } = request.body;
   const resolvedMachineId = Number(maquinaId);
 
-  if (!fecha || !turno || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0 || !Array.isArray(rows) || rows.length === 0) {
-    response.status(400).json({ message: 'fecha, turno, maquinaId y rows son obligatorios' });
+  if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0 || !Array.isArray(rows) || rows.length === 0) {
+    response.status(400).json({ message: 'fecha, turno, modo, maquinaId y rows son obligatorios' });
     return;
   }
 
@@ -191,19 +193,19 @@ app.post('/api/checklist', async (request, response) => {
     const params = [];
 
     rows.forEach((row, index) => {
-      const baseIndex = index * 9;
-      params.push(fecha, turno, resolvedMachineId, row.puntoId, row.checkId, row.valor, opNumero || '', firmaOperador || '', firmaSupervisor || '');
+      const baseIndex = index * 10;
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, opNumero || '', firmaOperador || '', firmaSupervisor || '');
       values.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9})`,
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`,
       );
     });
 
     await client.query(
       `
         INSERT INTO registros_checklist
-          (fecha, turno, maquina_id, punto_id, check_id, valor, op_numero, firma_operador, firma_supervisor)
+          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, op_numero, firma_operador, firma_supervisor)
         VALUES ${values.join(', ')}
-        ON CONFLICT (fecha, turno, maquina_id, punto_id, check_id)
+        ON CONFLICT (fecha, turno, modo, maquina_id, punto_id, check_id)
         DO UPDATE SET
           valor = EXCLUDED.valor,
           op_numero = EXCLUDED.op_numero,
@@ -215,7 +217,7 @@ app.post('/api/checklist', async (request, response) => {
     );
 
     await client.query('COMMIT');
-    response.status(201).json({ ok: true, savedRows: rows.length, maquinaId: resolvedMachineId });
+    response.status(201).json({ ok: true, savedRows: rows.length, maquinaId: resolvedMachineId, modo });
   } catch (error) {
     await client.query('ROLLBACK');
     response.status(500).json({ message: error.message });

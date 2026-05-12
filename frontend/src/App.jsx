@@ -78,6 +78,7 @@ function App() {
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     turno: 'A',
+    modo: 'parada',
     linea: '',
     maquinaId: '',
     opNumero: '',
@@ -175,7 +176,12 @@ function App() {
           firmaSupervisor: '',
         }));
 
-        const search = new URLSearchParams({ fecha: metadata.fecha, turno: metadata.turno, maquinaId: metadata.maquinaId });
+        const search = new URLSearchParams({
+          fecha: metadata.fecha,
+          turno: metadata.turno,
+          modo: metadata.modo,
+          maquinaId: metadata.maquinaId,
+        });
         const response = await fetch(`${API_URL}/api/checklist?${search.toString()}`, { signal: controller.signal });
 
         if (!response.ok) {
@@ -206,7 +212,9 @@ function App() {
     loadExistingChecklist();
 
     return () => controller.abort();
-  }, [config.checks, filteredPoints, metadata.fecha, metadata.turno, metadata.maquinaId]);
+  }, [config.checks, filteredPoints, metadata.fecha, metadata.turno, metadata.modo, metadata.maquinaId]);
+
+  const selectedModeLabel = metadata.modo === 'arranque' ? 'Arranque de produccion' : 'Parada de produccion';
 
   const groupedChecks = useMemo(() => {
     const parada = config.checks.filter((check) => check.grupo === 'parada');
@@ -481,71 +489,76 @@ function App() {
           </table>
         </section>
 
-        <section className="grid gap-0 border-b-2 border-slate-500 lg:grid-cols-2">
-          {[
-            { title: 'Parada de produccion', suffix: 'parada' },
-            { title: 'Arranque o inicio de produccion', suffix: 'arranque' },
-          ].map((panel) => (
-            <div key={panel.suffix} className="border-r border-slate-500 last:border-r-0">
-              <div className="border-b border-slate-500 px-3 py-2 text-sm font-black uppercase">{panel.title}</div>
-              <div className="grid gap-4 px-3 py-4 md:grid-cols-2">
-                <label className="text-xs font-bold uppercase text-slate-700">
-                  Fecha
-                  <input
-                    name="fecha"
-                    type="date"
-                    value={metadata.fecha}
-                    onChange={handleMetadataChange}
-                    className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-                  />
-                </label>
-                <label className="text-xs font-bold uppercase text-slate-700">
-                  Turno
-                  <select
-                    name="turno"
-                    value={metadata.turno}
-                    onChange={handleMetadataChange}
-                    className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-                  >
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                  </select>
-                </label>
-                <label className="text-xs font-bold uppercase text-slate-700">
-                  OP
-                  <input
-                    name="opNumero"
-                    value={metadata.opNumero}
-                    onChange={handleMetadataChange}
-                    placeholder="Orden de produccion"
-                    className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-                  />
-                </label>
-                <label className="text-xs font-bold uppercase text-slate-700">
-                  Firma
-                  <input
-                    name="firmaOperador"
-                    value={metadata.firmaOperador}
-                    onChange={handleMetadataChange}
-                    placeholder="Nombre del operador"
-                    className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-                  />
-                </label>
-                <label className="text-xs font-bold uppercase text-slate-700 md:col-span-2">
-                  SUP
-                  <input
-                    name="firmaSupervisor"
-                    value={metadata.firmaSupervisor}
-                    onChange={handleMetadataChange}
-                    placeholder="Nombre del supervisor"
-                    className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-                  />
-                </label>
-              </div>
-            </div>
-          ))}
+        <section className="border-b-2 border-slate-500">
+          <div className="border-b border-slate-500 px-3 py-2 text-sm font-black uppercase">{selectedModeLabel}</div>
+          <div className="grid gap-4 px-3 py-4 md:grid-cols-3">
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Fecha
+              <input
+                name="fecha"
+                type="date"
+                value={metadata.fecha}
+                onChange={handleMetadataChange}
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Turno
+              <select
+                name="turno"
+                value={metadata.turno}
+                onChange={handleMetadataChange}
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              >
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Tipo de registro
+              <select
+                name="modo"
+                value={metadata.modo}
+                onChange={handleMetadataChange}
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              >
+                <option value="parada">Parada</option>
+                <option value="arranque">Arranque</option>
+              </select>
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700">
+              OP
+              <input
+                name="opNumero"
+                value={metadata.opNumero}
+                onChange={handleMetadataChange}
+                placeholder="Orden de produccion"
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700">
+              Firma
+              <input
+                name="firmaOperador"
+                value={metadata.firmaOperador}
+                onChange={handleMetadataChange}
+                placeholder="Nombre del operador"
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700 md:col-span-3">
+              SUP
+              <input
+                name="firmaSupervisor"
+                value={metadata.firmaSupervisor}
+                onChange={handleMetadataChange}
+                placeholder="Nombre del supervisor"
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              />
+            </label>
+          </div>
         </section>
 
         <section>
