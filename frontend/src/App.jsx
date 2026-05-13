@@ -77,7 +77,7 @@ function App() {
   const [uploadingMap, setUploadingMap] = useState(false);
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
-    turno: 'A',
+    turno: '1',
     modo: 'parada',
     linea: '',
     maquinaId: '',
@@ -511,10 +511,9 @@ function App() {
                 onChange={handleMetadataChange}
                 className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
               >
-                <option value="A">A</option>
-                <option value="B">B</option>
                 <option value="1">1</option>
                 <option value="2">2</option>
+                <option value="3">3</option>
               </select>
             </label>
             <label className="text-xs font-bold uppercase text-slate-700">
