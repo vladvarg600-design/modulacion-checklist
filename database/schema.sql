@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS registros_checklist (
     punto_id INTEGER NOT NULL REFERENCES puntos_aislamiento(id),
     check_id INTEGER NOT NULL REFERENCES tipos_check(id),
     valor BOOLEAN DEFAULT FALSE,
+    numero_sharp INTEGER,
     op_numero VARCHAR(50),
     firma_operador VARCHAR(100),
     firma_supervisor VARCHAR(100),
@@ -68,6 +69,9 @@ ALTER TABLE registros_checklist
 
 ALTER TABLE registros_checklist
     ADD COLUMN IF NOT EXISTS modo VARCHAR(20) NOT NULL DEFAULT 'parada';
+
+ALTER TABLE registros_checklist
+    ADD COLUMN IF NOT EXISTS numero_sharp INTEGER;
 
 ALTER TABLE registros_checklist
     DROP CONSTRAINT IF EXISTS registros_checklist_fecha_turno_punto_id_check_id_key;

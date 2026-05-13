@@ -137,6 +137,7 @@ app.get('/api/checklist', async (request, response) => {
           rc.punto_id,
           rc.check_id,
           rc.valor,
+          rc.numero_sharp,
           rc.op_numero,
           rc.firma_operador,
           rc.firma_supervisor,
@@ -159,11 +160,13 @@ app.get('/api/checklist', async (request, response) => {
       modo,
       metadata: metadataSource
         ? {
+            numeroSharp: metadataSource.numero_sharp ?? '',
             opNumero: metadataSource.op_numero || '',
             firmaOperador: metadataSource.firma_operador || '',
             firmaSupervisor: metadataSource.firma_supervisor || '',
           }
         : {
+            numeroSharp: '',
             opNumero: '',
             firmaOperador: '',
             firmaSupervisor: '',
@@ -176,11 +179,20 @@ app.get('/api/checklist', async (request, response) => {
 });
 
 app.post('/api/checklist', async (request, response) => {
-  const { fecha, turno, modo, maquinaId, opNumero, firmaOperador, firmaSupervisor, rows } = request.body;
+  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, firmaOperador, firmaSupervisor, rows } = request.body;
   const resolvedMachineId = Number(maquinaId);
+  const resolvedNumeroSharp =
+    numeroSharp === '' || numeroSharp === null || numeroSharp === undefined
+      ? null
+      : Number(numeroSharp);
 
   if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0 || !Array.isArray(rows) || rows.length === 0) {
     response.status(400).json({ message: 'fecha, turno, modo, maquinaId y rows son obligatorios' });
+    return;
+  }
+
+  if (resolvedNumeroSharp !== null && (!Number.isInteger(resolvedNumeroSharp) || resolvedNumeroSharp < 0)) {
+    response.status(400).json({ message: 'numeroSharp debe ser un entero positivo' });
     return;
   }
 
@@ -193,21 +205,22 @@ app.post('/api/checklist', async (request, response) => {
     const params = [];
 
     rows.forEach((row, index) => {
-      const baseIndex = index * 10;
-      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, opNumero || '', firmaOperador || '', firmaSupervisor || '');
+      const baseIndex = index * 11;
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', firmaOperador || '', firmaSupervisor || '');
       values.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`,
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11})`,
       );
     });
 
     await client.query(
       `
         INSERT INTO registros_checklist
-          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, op_numero, firma_operador, firma_supervisor)
+          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, numero_sharp, op_numero, firma_operador, firma_supervisor)
         VALUES ${values.join(', ')}
         ON CONFLICT (fecha, turno, modo, maquina_id, punto_id, check_id)
         DO UPDATE SET
           valor = EXCLUDED.valor,
+          numero_sharp = EXCLUDED.numero_sharp,
           op_numero = EXCLUDED.op_numero,
           firma_operador = EXCLUDED.firma_operador,
           firma_supervisor = EXCLUDED.firma_supervisor,

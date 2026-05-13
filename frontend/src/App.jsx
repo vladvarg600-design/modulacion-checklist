@@ -81,6 +81,7 @@ function App() {
     modo: 'parada',
     linea: '',
     maquinaId: '',
+    numeroSharp: '',
     opNumero: '',
     firmaOperador: '',
     firmaSupervisor: '',
@@ -171,6 +172,7 @@ function App() {
         setCheckState({});
         setMetadata((current) => ({
           ...current,
+          numeroSharp: '',
           opNumero: '',
           firmaOperador: '',
           firmaSupervisor: '',
@@ -198,6 +200,7 @@ function App() {
         setCheckState(nextState);
         setMetadata((current) => ({
           ...current,
+          numeroSharp: payload.metadata.numeroSharp,
           opNumero: payload.metadata.opNumero,
           firmaOperador: payload.metadata.firmaOperador,
           firmaSupervisor: payload.metadata.firmaSupervisor,
@@ -213,8 +216,6 @@ function App() {
 
     return () => controller.abort();
   }, [config.checks, filteredPoints, metadata.fecha, metadata.turno, metadata.modo, metadata.maquinaId]);
-
-  const selectedModeLabel = metadata.modo === 'arranque' ? 'Arranque de produccion' : 'Parada de produccion';
 
   const groupedChecks = useMemo(() => {
     const parada = config.checks.filter((check) => check.grupo === 'parada');
@@ -490,7 +491,7 @@ function App() {
         </section>
 
         <section className="border-b-2 border-slate-500">
-          <div className="border-b border-slate-500 px-3 py-2 text-sm font-black uppercase">{selectedModeLabel}</div>
+          <div className="border-b border-slate-500 px-3 py-2 text-sm font-black uppercase">Registro de produccion</div>
           <div className="grid gap-4 px-3 py-4 md:grid-cols-3">
             <label className="text-xs font-bold uppercase text-slate-700">
               Fecha
@@ -517,16 +518,17 @@ function App() {
               </select>
             </label>
             <label className="text-xs font-bold uppercase text-slate-700">
-              Tipo de registro
-              <select
-                name="modo"
-                value={metadata.modo}
+              Numero Sharp
+              <input
+                name="numeroSharp"
+                type="number"
+                min="0"
+                step="1"
+                value={metadata.numeroSharp}
                 onChange={handleMetadataChange}
+                placeholder="Ej. 1250"
                 className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-              >
-                <option value="parada">Parada</option>
-                <option value="arranque">Arranque</option>
-              </select>
+              />
             </label>
             <label className="text-xs font-bold uppercase text-slate-700">
               OP
