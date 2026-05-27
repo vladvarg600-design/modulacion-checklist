@@ -576,22 +576,18 @@ function App() {
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {filteredPoints.map((punto) => (
                 <article key={`photo-${punto.id}`} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-                  <LazyImage
-                    src={punto.foto_url}
-                    alt={`Foto referencial ${punto.id_visual}`}
-                    fallbackLabel={punto.id_visual}
-                    badgeColor={punto.color_hex}
-                    className="aspect-[4/5] w-full bg-slate-100"
-                  />
-                  <div className="p-3">
-                    <span
-                      className="inline-flex rounded-md px-3 py-1 text-xs font-black uppercase text-white"
-                      style={{ backgroundColor: punto.color_hex }}
+                  <div className="relative">
+                    <LazyImage
+                      src={punto.foto_url}
+                      alt={`Foto referencial ${punto.id_visual}`}
+                      fallbackLabel={punto.id_visual}
+                      badgeColor={punto.color_hex}
+                      className="aspect-[1/1] w-full bg-slate-100"
+                    />
+                    <label
+                      className="absolute right-3 top-3 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+                      title={uploadingPointId === punto.id ? 'Subiendo imagen' : `Subir imagen para ${punto.id_visual}`}
                     >
-                      {punto.id_visual}
-                    </span>
-                    <p className="mt-2 text-sm font-semibold text-slate-700">{punto.descripcion}</p>
-                    <label className="mt-3 inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-100">
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp"
@@ -607,11 +603,43 @@ function App() {
                           event.target.value = '';
                         }}
                       />
-                      {uploadingPointId === punto.id ? 'Subiendo imagen...' : 'Subir imagen'}
+                      {uploadingPointId === punto.id ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 animate-spin">
+                          <path
+                            d="M12 3a9 9 0 1 0 9 9"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+                          <path
+                            d="M12 16V7m0 0-3.5 3.5M12 7l3.5 3.5M5 17.5V19h14v-1.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                      <span className="sr-only">{uploadingPointId === punto.id ? 'Subiendo imagen' : 'Subir imagen'}</span>
                     </label>
-                    <p className="mt-2 text-[11px] font-medium text-slate-500">
-                      PNG, JPG o WebP. Maximo 4 MB.
-                    </p>
+                  </div>
+                  <div className="space-y-2 p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className="inline-flex rounded-md px-2.5 py-1 text-[11px] font-black uppercase text-white"
+                        style={{ backgroundColor: punto.color_hex }}
+                      >
+                        {punto.id_visual}
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">4 MB</span>
+                    </div>
+                    <p className="text-xs font-semibold leading-snug text-slate-700">{punto.descripcion}</p>
                   </div>
                 </article>
               ))}
