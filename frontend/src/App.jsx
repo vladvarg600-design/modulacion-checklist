@@ -573,9 +573,9 @@ function App() {
             {selectedMachine?.nombre || 'Selecciona una maquina'}
           </div>
           <div className="grid gap-5 p-4 lg:grid-cols-[1.7fr_1fr]">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {filteredPoints.map((punto) => (
-                <article key={`photo-${punto.id}`} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+                <article key={`photo-${punto.id}`} className="self-start overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                   <div className="relative">
                     <LazyImage
                       src={punto.foto_url}
@@ -585,7 +585,7 @@ function App() {
                       className="aspect-[1/1] w-full bg-slate-100"
                     />
                     <label
-                      className="absolute right-3 top-3 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+                      className="absolute right-3 top-3 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
                       title={uploadingPointId === punto.id ? 'Subiendo imagen' : `Subir imagen para ${punto.id_visual}`}
                     >
                       <input
@@ -604,7 +604,7 @@ function App() {
                         }}
                       />
                       {uploadingPointId === punto.id ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 animate-spin">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5 animate-spin">
                           <path
                             d="M12 3a9 9 0 1 0 9 9"
                             fill="none"
@@ -615,7 +615,7 @@ function App() {
                           />
                         </svg>
                       ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
                           <path
                             d="M12 16V7m0 0-3.5 3.5M12 7l3.5 3.5M5 17.5V19h14v-1.5"
                             fill="none"
