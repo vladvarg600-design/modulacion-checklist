@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS tipos_check (
     descripcion_corta VARCHAR(100) NOT NULL,
     UNIQUE (grupo, orden)
 );
+CREATE TABLE IF NOT EXISTS responsables_sharp (
+    numero_sharp INTEGER PRIMARY KEY,
+    firma_operador VARCHAR(100) NOT NULL,
+    firma_supervisor VARCHAR(100) NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS registros_checklist (
     id SERIAL PRIMARY KEY,

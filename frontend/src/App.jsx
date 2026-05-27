@@ -75,6 +75,7 @@ function App() {
   const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
   const [uploadingPointId, setUploadingPointId] = useState(null);
   const [uploadingMap, setUploadingMap] = useState(false);
+  const [sharpLookup, setSharpLookup] = useState({ loading: false, message: '' });
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     turno: '1',
@@ -231,8 +232,67 @@ function App() {
 
   const handleMetadataChange = (event) => {
     const { name, value } = event.target;
+
+    if (name === 'numeroSharp') {
+      setSharpLookup({ loading: false, message: '' });
+      setMetadata((current) => ({
+        ...current,
+        numeroSharp: value,
+        firmaOperador: '',
+        firmaSupervisor: '',
+      }));
+      return;
+    }
+
     setMetadata((current) => ({ ...current, [name]: value }));
   };
+
+  useEffect(() => {
+    if (!metadata.numeroSharp) {
+      setSharpLookup({ loading: false, message: '' });
+      setMetadata((current) => ({
+        ...current,
+        firmaOperador: '',
+        firmaSupervisor: '',
+      }));
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    const loadSharpOwner = async () => {
+      setSharpLookup({ loading: true, message: '' });
+
+      try {
+        const response = await fetch(`${API_URL}/api/sharp/${metadata.numeroSharp}`, { signal: controller.signal });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'No se pudo resolver el Numero Sharp');
+        }
+
+        setMetadata((current) => ({
+          ...current,
+          firmaOperador: payload.firmaOperador || '',
+          firmaSupervisor: payload.firmaSupervisor || '',
+        }));
+        setSharpLookup({ loading: false, message: '' });
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setMetadata((current) => ({
+            ...current,
+            firmaOperador: '',
+            firmaSupervisor: '',
+          }));
+          setSharpLookup({ loading: false, message: error.message });
+        }
+      }
+    };
+
+    loadSharpOwner();
+
+    return () => controller.abort();
+  }, [metadata.numeroSharp]);
 
   const handlePhotoUpload = async (pointId, file) => {
     if (!file || !metadata.maquinaId) {
@@ -316,6 +376,16 @@ function App() {
   const handleSubmit = async () => {
     if (!metadata.turno.trim()) {
       setStatus((current) => ({ ...current, error: 'El turno es obligatorio' }));
+      return;
+    }
+
+    if (!metadata.numeroSharp) {
+      setStatus((current) => ({ ...current, error: 'El Numero Sharp es obligatorio' }));
+      return;
+    }
+
+    if (!metadata.firmaOperador || !metadata.firmaSupervisor) {
+      setStatus((current) => ({ ...current, error: 'Numero Sharp no tiene responsables asociados' }));
       return;
     }
 
@@ -544,9 +614,9 @@ function App() {
               <input
                 name="firmaOperador"
                 value={metadata.firmaOperador}
-                onChange={handleMetadataChange}
-                placeholder="Nombre del operador"
-                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+                readOnly
+                placeholder="Se completa con Numero Sharp"
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-slate-50 px-0 py-2 text-sm outline-none"
               />
             </label>
             <label className="text-xs font-bold uppercase text-slate-700 md:col-span-3">
@@ -554,12 +624,22 @@ function App() {
               <input
                 name="firmaSupervisor"
                 value={metadata.firmaSupervisor}
-                onChange={handleMetadataChange}
-                placeholder="Nombre del supervisor"
-                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+                readOnly
+                placeholder="Se completa con Numero Sharp"
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-slate-50 px-0 py-2 text-sm outline-none"
               />
             </label>
           </div>
+          {sharpLookup.loading && (
+            <p className="px-3 pb-3 text-xs font-semibold text-slate-500">
+              Buscando responsable por Numero Sharp...
+            </p>
+          )}
+          {!sharpLookup.loading && sharpLookup.message && (
+            <p className="px-3 pb-3 text-xs font-semibold text-rose-600">
+              {sharpLookup.message}
+            </p>
+          )}
         </section>
 
         <section>
@@ -630,14 +710,13 @@ function App() {
                     </label>
                   </div>
                   <div className="space-y-2 p-2.5">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
                       <span
                         className="inline-flex rounded-md px-2.5 py-1 text-[11px] font-black uppercase text-white"
                         style={{ backgroundColor: punto.color_hex }}
                       >
                         {punto.id_visual}
                       </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">4 MB</span>
                     </div>
                     <p className="text-xs font-semibold leading-snug text-slate-700">{punto.descripcion}</p>
                   </div>
@@ -703,9 +782,6 @@ function App() {
                   );
                 })}
               </div>
-              <p className="relative z-10 mt-3 text-[11px] font-medium text-slate-600">
-                PNG, JPG o WebP. Maximo 4 MB por mapa.
-              </p>
             </div>
           </div>
         </section>

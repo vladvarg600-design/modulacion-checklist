@@ -139,13 +139,14 @@ app.get('/api/checklist', async (request, response) => {
           rc.valor,
           rc.numero_sharp,
           rc.op_numero,
-          rc.firma_operador,
-          rc.firma_supervisor,
+          COALESCE(rs.firma_operador, rc.firma_operador) AS firma_operador,
+          COALESCE(rs.firma_supervisor, rc.firma_supervisor) AS firma_supervisor,
           pa.id_visual,
           tc.descripcion_corta
         FROM registros_checklist rc
         JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
         JOIN tipos_check tc ON tc.id = rc.check_id
+        LEFT JOIN responsables_sharp rs ON rs.numero_sharp = rc.numero_sharp
         WHERE rc.fecha = $1 AND rc.turno = $2 AND rc.modo = $3 AND rc.maquina_id = $4
         ORDER BY pa.orden ASC, tc.orden ASC
       `,
@@ -178,8 +179,43 @@ app.get('/api/checklist', async (request, response) => {
   }
 });
 
+app.get('/api/sharp/:numeroSharp', async (request, response) => {
+  const numeroSharp = Number(request.params.numeroSharp);
+
+  if (!Number.isInteger(numeroSharp) || numeroSharp < 0) {
+    response.status(400).json({ message: 'numeroSharp debe ser un entero positivo' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT numero_sharp, firma_operador, firma_supervisor
+        FROM responsables_sharp
+        WHERE numero_sharp = $1
+      `,
+      [numeroSharp],
+    );
+
+    const sharpOwner = result.rows[0];
+
+    if (!sharpOwner) {
+      response.status(404).json({ message: 'No existe un responsable asociado a ese Numero Sharp' });
+      return;
+    }
+
+    response.json({
+      numeroSharp: sharpOwner.numero_sharp,
+      firmaOperador: sharpOwner.firma_operador,
+      firmaSupervisor: sharpOwner.firma_supervisor,
+    });
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
 app.post('/api/checklist', async (request, response) => {
-  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, firmaOperador, firmaSupervisor, rows } = request.body;
+  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, rows } = request.body;
   const resolvedMachineId = Number(maquinaId);
   const resolvedNumeroSharp =
     numeroSharp === '' || numeroSharp === null || numeroSharp === undefined
@@ -188,6 +224,11 @@ app.post('/api/checklist', async (request, response) => {
 
   if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0 || !Array.isArray(rows) || rows.length === 0) {
     response.status(400).json({ message: 'fecha, turno, modo, maquinaId y rows son obligatorios' });
+    return;
+  }
+
+  if (resolvedNumeroSharp === null) {
+    response.status(400).json({ message: 'numeroSharp es obligatorio' });
     return;
   }
 
@@ -201,12 +242,29 @@ app.post('/api/checklist', async (request, response) => {
   try {
     await client.query('BEGIN');
 
+    const sharpLookupResult = await client.query(
+      `
+        SELECT firma_operador, firma_supervisor
+        FROM responsables_sharp
+        WHERE numero_sharp = $1
+      `,
+      [resolvedNumeroSharp],
+    );
+
+    const sharpOwner = sharpLookupResult.rows[0];
+
+    if (!sharpOwner) {
+      await client.query('ROLLBACK');
+      response.status(400).json({ message: 'No existe un responsable asociado a ese Numero Sharp' });
+      return;
+    }
+
     const values = [];
     const params = [];
 
     rows.forEach((row, index) => {
       const baseIndex = index * 11;
-      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', firmaOperador || '', firmaSupervisor || '');
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.firma_operador, sharpOwner.firma_supervisor);
       values.push(
         `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11})`,
       );

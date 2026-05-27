@@ -172,3 +172,11 @@ VALUES
     ('Arranque', 4, 'arranque', 'Arranque'),
     ('BrakeDown o CIP', 5, 'breakdown', 'BrakeDown o CIP')
 ON CONFLICT DO NOTHING;
+INSERT INTO responsables_sharp (numero_sharp, firma_operador, firma_supervisor)
+VALUES
+    (1250, 'Operador Demo', 'Supervisor Demo'),
+    (1502, 'Ozum', 'Vladimir'),
+    (2008, 'Vladzum', 'Vladmimir')
+ON CONFLICT (numero_sharp) DO UPDATE SET
+    firma_operador = EXCLUDED.firma_operador,
+    firma_supervisor = EXCLUDED.firma_supervisor;
