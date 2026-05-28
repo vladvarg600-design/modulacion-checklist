@@ -45,11 +45,60 @@ CREATE TABLE IF NOT EXISTS tipos_check (
     descripcion_corta VARCHAR(100) NOT NULL,
     UNIQUE (grupo, orden)
 );
+
 CREATE TABLE IF NOT EXISTS responsables_sharp (
-    numero_sharp INTEGER PRIMARY KEY,
-    firma_operador VARCHAR(100) NOT NULL,
-    firma_supervisor VARCHAR(100) NOT NULL
+    numero_sharp BIGINT PRIMARY KEY,
+    apellido VARCHAR(120),
+    nombre VARCHAR(120),
+    nombre_completo VARCHAR(240),
+    equipo VARCHAR(100),
+    linea VARCHAR(20),
+    lider_nombre VARCHAR(240),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE responsables_sharp
+    ALTER COLUMN numero_sharp TYPE BIGINT USING numero_sharp::BIGINT;
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS apellido VARCHAR(120);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS nombre VARCHAR(120);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(240);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS equipo VARCHAR(100);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS linea VARCHAR(20);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS lider_nombre VARCHAR(240);
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+ALTER TABLE responsables_sharp
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+UPDATE responsables_sharp
+SET
+    nombre_completo = COALESCE(NULLIF(nombre_completo, ''), firma_operador),
+    lider_nombre = COALESCE(NULLIF(lider_nombre, ''), firma_supervisor),
+    updated_at = NOW()
+WHERE
+    (nombre_completo IS NULL OR nombre_completo = '')
+    OR (lider_nombre IS NULL OR lider_nombre = '');
+
+ALTER TABLE responsables_sharp
+    DROP COLUMN IF EXISTS firma_operador;
+
+ALTER TABLE responsables_sharp
+    DROP COLUMN IF EXISTS firma_supervisor;
 
 CREATE TABLE IF NOT EXISTS registros_checklist (
     id SERIAL PRIMARY KEY,
@@ -77,6 +126,9 @@ ALTER TABLE registros_checklist
 
 ALTER TABLE registros_checklist
     ADD COLUMN IF NOT EXISTS numero_sharp INTEGER;
+
+ALTER TABLE registros_checklist
+    ALTER COLUMN numero_sharp TYPE BIGINT USING numero_sharp::BIGINT;
 
 ALTER TABLE registros_checklist
     DROP CONSTRAINT IF EXISTS registros_checklist_fecha_turno_punto_id_check_id_key;

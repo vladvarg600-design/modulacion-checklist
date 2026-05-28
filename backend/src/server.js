@@ -139,8 +139,8 @@ app.get('/api/checklist', async (request, response) => {
           rc.valor,
           rc.numero_sharp,
           rc.op_numero,
-          COALESCE(rs.firma_operador, rc.firma_operador) AS firma_operador,
-          COALESCE(rs.firma_supervisor, rc.firma_supervisor) AS firma_supervisor,
+          COALESCE(rs.nombre_completo, rc.firma_operador) AS firma_operador,
+          COALESCE(rs.lider_nombre, rc.firma_supervisor) AS firma_supervisor,
           pa.id_visual,
           tc.descripcion_corta
         FROM registros_checklist rc
@@ -190,7 +190,7 @@ app.get('/api/sharp/:numeroSharp', async (request, response) => {
   try {
     const result = await pool.query(
       `
-        SELECT numero_sharp, firma_operador, firma_supervisor
+        SELECT numero_sharp, apellido, nombre, nombre_completo, equipo, linea, lider_nombre
         FROM responsables_sharp
         WHERE numero_sharp = $1
       `,
@@ -206,8 +206,13 @@ app.get('/api/sharp/:numeroSharp', async (request, response) => {
 
     response.json({
       numeroSharp: sharpOwner.numero_sharp,
-      firmaOperador: sharpOwner.firma_operador,
-      firmaSupervisor: sharpOwner.firma_supervisor,
+      apellido: sharpOwner.apellido,
+      nombre: sharpOwner.nombre,
+      nombreCompleto: sharpOwner.nombre_completo,
+      equipo: sharpOwner.equipo,
+      linea: sharpOwner.linea,
+      firmaOperador: sharpOwner.nombre_completo,
+      firmaSupervisor: sharpOwner.lider_nombre,
     });
   } catch (error) {
     response.status(500).json({ message: error.message });
@@ -244,7 +249,7 @@ app.post('/api/checklist', async (request, response) => {
 
     const sharpLookupResult = await client.query(
       `
-        SELECT firma_operador, firma_supervisor
+        SELECT nombre_completo, lider_nombre
         FROM responsables_sharp
         WHERE numero_sharp = $1
       `,
@@ -264,7 +269,7 @@ app.post('/api/checklist', async (request, response) => {
 
     rows.forEach((row, index) => {
       const baseIndex = index * 11;
-      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.firma_operador, sharpOwner.firma_supervisor);
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.nombre_completo, sharpOwner.lider_nombre);
       values.push(
         `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11})`,
       );
