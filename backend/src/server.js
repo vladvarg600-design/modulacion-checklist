@@ -155,17 +155,19 @@ app.get('/api/operadores', async (_request, response) => {
 });
 
 app.get('/api/historial', async (request, response) => {
-  const { fecha, operador } = request.query;
+  const { fechaInicio, fechaFin, operador } = request.query;
 
-  if (!fecha) {
-    response.status(400).json({ message: 'La fecha es obligatoria' });
+  if (!fechaInicio || !fechaFin) {
+    response.status(400).json({ message: 'Las fechas de inicio y fin son obligatorias' });
     return;
   }
 
   try {
     let query = `
       SELECT 
+        rc.fecha,
         rc.created_at,
+        rc.updated_at,
         m.nombre AS maquina_nombre,
         pa.id_visual,
         pa.descripcion AS punto_descripcion,
@@ -176,16 +178,16 @@ app.get('/api/historial', async (request, response) => {
       JOIN maquinas m ON m.id = rc.maquina_id
       JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
       JOIN tipos_check tc ON tc.id = rc.check_id
-      WHERE rc.fecha = $1 AND rc.valor = true
+      WHERE rc.fecha >= $1 AND rc.fecha <= $2 AND rc.valor = true
     `;
-    const params = [fecha];
+    const params = [fechaInicio, fechaFin];
 
     if (operador) {
       params.push(`%${operador}%`);
-      query += ` AND rc.firma_operador ILIKE $2`;
+      query += ` AND rc.firma_operador ILIKE $3`;
     }
 
-    query += ` ORDER BY rc.created_at DESC`;
+    query += ` ORDER BY rc.fecha DESC, rc.updated_at DESC`;
 
     const result = await pool.query(query, params);
     response.json(result.rows);

@@ -78,7 +78,8 @@ function App() {
   const [sessions, setSessions] = useState([]);
   const [activeTab, setActiveTab] = useState('checklist');
   const [operadores, setOperadores] = useState([]);
-  const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [historyStartDate, setHistoryStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [historyEndDate, setHistoryEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [historyOperator, setHistoryOperator] = useState('');
   const [historyRecords, setHistoryRecords] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -211,7 +212,10 @@ function App() {
     const loadHistory = async () => {
       setHistoryLoading(true);
       try {
-        const search = new URLSearchParams({ fecha: historyDate });
+        const search = new URLSearchParams({
+          fechaInicio: historyStartDate,
+          fechaFin: historyEndDate
+        });
         if (historyOperator) search.append('operador', historyOperator);
         
         const response = await fetch(`${API_URL}/api/historial?${search.toString()}`, { signal: controller.signal });
@@ -226,7 +230,7 @@ function App() {
     };
     loadHistory();
     return () => controller.abort();
-  }, [activeTab, historyDate, historyOperator]);
+  }, [activeTab, historyStartDate, historyEndDate, historyOperator]);
 
   useEffect(() => {
     if (!filteredPoints.length || !config.checks.length || !metadata.maquinaId) {
@@ -457,9 +461,10 @@ function App() {
   const handleDownloadCSV = () => {
     if (!historyRecords.length) return;
 
-    const headers = ['Hora', 'Maquina', 'Punto', 'Descripcion del Punto', 'Check', 'Operador'];
+    const headers = ['Fecha Turno', 'Fecha Subida', 'Maquina', 'Punto', 'Descripcion del Punto', 'Check', 'Operador'];
     const rows = historyRecords.map(r => [
-      new Date(r.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+      r.fecha ? new Date(r.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '',
+      new Date(r.updated_at || r.created_at).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
       r.maquina_nombre,
       r.id_visual,
       r.punto_descripcion,
@@ -476,7 +481,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Historial_Novedades_${historyDate}.csv`);
+    link.setAttribute('download', `Historial_Novedades_${historyStartDate}_al_${historyEndDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -978,13 +983,22 @@ function App() {
           </>
         ) : (
           <section className="p-4 md:p-6 bg-slate-50 rounded-b-[28px]">
-            <div className="mb-6 grid gap-4 md:grid-cols-3">
+            <div className="mb-6 grid gap-4 md:grid-cols-4">
               <label className="text-xs font-bold uppercase text-slate-700">
-                Fecha
+                Fecha Inicio
                 <input
                   type="date"
-                  value={historyDate}
-                  onChange={(e) => setHistoryDate(e.target.value)}
+                  value={historyStartDate}
+                  onChange={(e) => setHistoryStartDate(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+                />
+              </label>
+              <label className="text-xs font-bold uppercase text-slate-700">
+                Fecha Fin
+                <input
+                  type="date"
+                  value={historyEndDate}
+                  onChange={(e) => setHistoryEndDate(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
                 />
               </label>
@@ -1018,7 +1032,8 @@ function App() {
               <table className="min-w-full border-collapse text-left text-xs md:text-sm">
                 <thead>
                   <tr className="border-b border-slate-300 bg-slate-100 uppercase text-slate-700">
-                    <th className="px-4 py-3 font-bold">Hora</th>
+                    <th className="px-4 py-3 font-bold">Fecha Turno</th>
+                    <th className="px-4 py-3 font-bold">Subido El</th>
                     <th className="px-4 py-3 font-bold">Maquina</th>
                     <th className="px-4 py-3 font-bold">Punto</th>
                     <th className="px-4 py-3 font-bold">Descripcion</th>
@@ -1029,16 +1044,17 @@ function App() {
                 <tbody className="divide-y divide-slate-200">
                   {historyLoading ? (
                     <tr>
-                      <td colSpan="6" className="px-4 py-8 text-center font-semibold text-slate-500">Cargando historial...</td>
+                      <td colSpan="7" className="px-4 py-8 text-center font-semibold text-slate-500">Cargando historial...</td>
                     </tr>
                   ) : historyRecords.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-4 py-8 text-center font-semibold text-slate-500">No se encontraron registros de novedades (True) para estos filtros.</td>
+                      <td colSpan="7" className="px-4 py-8 text-center font-semibold text-slate-500">No se encontraron registros de novedades (True) para estos filtros.</td>
                     </tr>
                   ) : (
                     historyRecords.map((r, i) => (
                       <tr key={i} className="hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-4 py-3">{new Date(r.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{r.fecha ? new Date(r.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : ''}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-500">{new Date(r.updated_at || r.created_at).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })}</td>
                         <td className="px-4 py-3 font-semibold text-slate-800">{r.maquina_nombre}</td>
                         <td className="px-4 py-3"><span className="rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700">{r.id_visual}</span></td>
                         <td className="px-4 py-3">{r.punto_descripcion}</td>
