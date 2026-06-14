@@ -76,6 +76,12 @@ function App() {
   const [uploadingPointId, setUploadingPointId] = useState(null);
   const [uploadingMap, setUploadingMap] = useState(false);
   const [sessions, setSessions] = useState([]);
+  const [activeTab, setActiveTab] = useState('checklist');
+  const [operadores, setOperadores] = useState([]);
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [historyOperator, setHistoryOperator] = useState('');
+  const [historyRecords, setHistoryRecords] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState('new');
   const [sharpLookup, setSharpLookup] = useState({ loading: false, message: '' });
   const [metadata, setMetadata] = useState({
@@ -132,6 +138,19 @@ function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const loadOperadores = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/operadores`);
+        if (response.ok) {
+          const data = await response.json();
+          setOperadores(data);
+        }
+      } catch (error) {}
+    };
+    loadOperadores();
+  }, []);
+
   const machinesForSelectedLine = useMemo(
     () => config.maquinas.filter((machine) => machine.linea === metadata.linea),
     [config.maquinas, metadata.linea],
@@ -185,6 +204,29 @@ function App() {
     loadSessions();
     return () => controller.abort();
   }, [metadata.fecha, metadata.turno, metadata.modo, metadata.maquinaId]);
+
+  useEffect(() => {
+    if (activeTab !== 'historial') return;
+    const controller = new AbortController();
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const search = new URLSearchParams({ fecha: historyDate });
+        if (historyOperator) search.append('operador', historyOperator);
+        
+        const response = await fetch(`${API_URL}/api/historial?${search.toString()}`, { signal: controller.signal });
+        if (response.ok) {
+          const data = await response.json();
+          setHistoryRecords(data);
+        }
+      } catch (error) {
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    loadHistory();
+    return () => controller.abort();
+  }, [activeTab, historyDate, historyOperator]);
 
   useEffect(() => {
     if (!filteredPoints.length || !config.checks.length || !metadata.maquinaId) {
@@ -412,6 +454,34 @@ function App() {
       : `sess-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   };
 
+  const handleDownloadCSV = () => {
+    if (!historyRecords.length) return;
+
+    const headers = ['Hora', 'Maquina', 'Punto', 'Descripcion del Punto', 'Check', 'Operador'];
+    const rows = historyRecords.map(r => [
+      new Date(r.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+      r.maquina_nombre,
+      r.id_visual,
+      r.punto_descripcion,
+      r.check_nombre,
+      r.firma_operador
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Historial_Novedades_${historyDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSubmit = async () => {
     if (!metadata.turno.trim()) {
       setStatus((current) => ({ ...current, error: 'El turno es obligatorio' }));
@@ -533,15 +603,28 @@ function App() {
               <div className="text-2xl font-black italic text-safetyDark">VPO</div>
               <span>APP-MA-VPOE-J-002</span>
             </div>
-          </div>
-          <div className="border-t border-slate-500 bg-safety px-4 py-1 text-center text-sm font-black uppercase text-white md:text-base">
-            Checklist de modulacion de energia y fluidos
-          </div>
-          <div className="border-t border-slate-500 px-4 py-1 text-center text-xs font-bold uppercase md:text-sm">Packaging</div>
-          <div className="border-t border-slate-500 bg-softBlue px-4 py-2 text-center text-sm font-black uppercase md:text-base">
-            {selectedMachine?.nombre || 'Selecciona una maquina'}
-          </div>
         </header>
+
+        <div className="flex border-b border-slate-500 bg-slate-100 text-sm font-black uppercase text-slate-600">
+          <button
+            onClick={() => setActiveTab('checklist')}
+            className={`flex-1 py-3 transition ${activeTab === 'checklist' ? 'bg-safety text-white' : 'hover:bg-slate-200'}`}
+          >
+            Registro de Modulacion
+          </button>
+          <button
+            onClick={() => setActiveTab('historial')}
+            className={`flex-1 py-3 transition ${activeTab === 'historial' ? 'bg-safety text-white' : 'hover:bg-slate-200'}`}
+          >
+            Historial de Novedades
+          </button>
+        </div>
+
+        {activeTab === 'checklist' ? (
+          <>
+            <div className="border-b border-slate-500 bg-softBlue px-4 py-2 text-center text-sm font-black uppercase md:text-base">
+              {selectedMachine?.nombre || 'Selecciona una maquina'}
+            </div>
 
         <section className="border-b border-slate-500 bg-slate-50 px-4 py-4">
           <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
@@ -891,6 +974,83 @@ function App() {
             {status.saving ? 'Guardando...' : 'Subir a base de datos'}
           </button>
         </footer>
+          </>
+        ) : (
+          <section className="p-4 md:p-6 bg-slate-50 rounded-b-[28px]">
+            <div className="mb-6 grid gap-4 md:grid-cols-3">
+              <label className="text-xs font-bold uppercase text-slate-700">
+                Fecha
+                <input
+                  type="date"
+                  value={historyDate}
+                  onChange={(e) => setHistoryDate(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+                />
+              </label>
+              <label className="text-xs font-bold uppercase text-slate-700">
+                Operador (Busqueda)
+                <input
+                  list="operadores-list"
+                  value={historyOperator}
+                  onChange={(e) => setHistoryOperator(e.target.value)}
+                  placeholder="Escribe para buscar..."
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+                />
+                <datalist id="operadores-list">
+                  {operadores.map(op => (
+                    <option key={op.numero_sharp} value={op.nombre_completo} />
+                  ))}
+                </datalist>
+              </label>
+              <div className="flex items-end">
+                <button
+                  onClick={handleDownloadCSV}
+                  disabled={!historyRecords.length}
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black uppercase text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Descargar CSV / Excel
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-300 bg-white shadow-sm">
+              <table className="min-w-full border-collapse text-left text-xs md:text-sm">
+                <thead>
+                  <tr className="border-b border-slate-300 bg-slate-100 uppercase text-slate-700">
+                    <th className="px-4 py-3 font-bold">Hora</th>
+                    <th className="px-4 py-3 font-bold">Maquina</th>
+                    <th className="px-4 py-3 font-bold">Punto</th>
+                    <th className="px-4 py-3 font-bold">Descripcion</th>
+                    <th className="px-4 py-3 font-bold">Check</th>
+                    <th className="px-4 py-3 font-bold">Operador</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {historyLoading ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center font-semibold text-slate-500">Cargando historial...</td>
+                    </tr>
+                  ) : historyRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center font-semibold text-slate-500">No se encontraron registros de novedades (True) para estos filtros.</td>
+                    </tr>
+                  ) : (
+                    historyRecords.map((r, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-4 py-3">{new Date(r.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-800">{r.maquina_nombre}</td>
+                        <td className="px-4 py-3"><span className="rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700">{r.id_visual}</span></td>
+                        <td className="px-4 py-3">{r.punto_descripcion}</td>
+                        <td className="px-4 py-3 font-semibold text-safety">{r.check_nombre}</td>
+                        <td className="px-4 py-3">{r.firma_operador}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

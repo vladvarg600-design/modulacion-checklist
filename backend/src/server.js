@@ -143,6 +143,57 @@ app.get('/api/sessions', async (request, response) => {
   }
 });
 
+app.get('/api/operadores', async (_request, response) => {
+  try {
+    const result = await pool.query(
+      `SELECT numero_sharp, nombre_completo FROM responsables_sharp ORDER BY nombre_completo ASC`
+    );
+    response.json(result.rows);
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/historial', async (request, response) => {
+  const { fecha, operador } = request.query;
+
+  if (!fecha) {
+    response.status(400).json({ message: 'La fecha es obligatoria' });
+    return;
+  }
+
+  try {
+    let query = `
+      SELECT 
+        rc.created_at,
+        m.nombre AS maquina_nombre,
+        pa.id_visual,
+        pa.descripcion AS punto_descripcion,
+        tc.descripcion_corta AS check_nombre,
+        rc.firma_operador,
+        rc.firma_supervisor
+      FROM registros_checklist rc
+      JOIN maquinas m ON m.id = rc.maquina_id
+      JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
+      JOIN tipos_check tc ON tc.id = rc.check_id
+      WHERE rc.fecha = $1 AND rc.valor = true
+    `;
+    const params = [fecha];
+
+    if (operador) {
+      params.push(`%${operador}%`);
+      query += ` AND rc.firma_operador ILIKE $2`;
+    }
+
+    query += ` ORDER BY rc.created_at DESC`;
+
+    const result = await pool.query(query, params);
+    response.json(result.rows);
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
 app.get('/api/checklist', async (request, response) => {
   const { sessionId, maquinaId } = request.query;
   const resolvedMachineId = Number(maquinaId);
