@@ -83,7 +83,6 @@ function App() {
     linea: '',
     maquinaId: '',
     numeroSharp: '',
-    opNumero: '',
     firmaOperador: '',
     firmaSupervisor: '',
   });
@@ -175,7 +174,6 @@ function App() {
         setMetadata((current) => ({
           ...current,
           numeroSharp: '',
-          opNumero: '',
           firmaOperador: '',
           firmaSupervisor: '',
         }));
@@ -203,7 +201,6 @@ function App() {
         setMetadata((current) => ({
           ...current,
           numeroSharp: payload.metadata.numeroSharp,
-          opNumero: payload.metadata.opNumero,
           firmaOperador: payload.metadata.firmaOperador,
           firmaSupervisor: payload.metadata.firmaSupervisor,
         }));
@@ -636,16 +633,6 @@ function App() {
               />
             </label>
             <label className="text-xs font-bold uppercase text-slate-700">
-              OP
-              <input
-                name="opNumero"
-                value={metadata.opNumero}
-                onChange={handleMetadataChange}
-                placeholder="Orden de produccion"
-                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
-              />
-            </label>
-            <label className="text-xs font-bold uppercase text-slate-700">
               Firma
               <input
                 name="firmaOperador"
@@ -655,7 +642,7 @@ function App() {
                 className="mt-1 w-full border-0 border-b border-slate-500 bg-slate-50 px-0 py-2 text-sm outline-none"
               />
             </label>
-            <label className="text-xs font-bold uppercase text-slate-700 md:col-span-3">
+        <label className="text-xs font-bold uppercase text-slate-700 md:col-span-2">
               SUP
               <input
                 name="firmaSupervisor"
