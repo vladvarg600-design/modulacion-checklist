@@ -89,6 +89,7 @@ function App() {
   });
   const [checkState, setCheckState] = useState({});
   const [status, setStatus] = useState({ loading: true, saving: false, message: '', error: '' });
+  const [successData, setSuccessData] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -425,7 +426,11 @@ function App() {
         throw new Error(payload.message || 'No se pudo guardar la jornada');
       }
 
-      setStatus({ loading: false, saving: false, message: 'Jornada guardada correctamente.', error: '' });
+      setSuccessData({
+        fecha: new Date().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
+        usuario: metadata.firmaOperador,
+      });
+      setStatus({ loading: false, saving: false, message: '', error: '' });
     } catch (error) {
       setStatus({ loading: false, saving: false, message: '', error: error.message });
     }
@@ -433,6 +438,37 @@ function App() {
 
   return (
     <main className="min-h-screen px-3 py-6 text-ink md:px-6">
+      {successData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-10 w-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-black text-slate-800">¡Ingreso de datos exitoso!</h2>
+            <p className="mt-2 text-slate-600">Usted acaba de realizar su modulación.</p>
+
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-slate-500">Fecha y Hora</span>
+                <span className="text-sm font-semibold text-slate-800">{successData.fecha}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-slate-500">Usuario</span>
+                <span className="text-sm font-semibold text-slate-800 text-right">{successData.usuario}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSuccessData(null)}
+              className="mt-8 w-full rounded-full bg-safety px-4 py-3 text-sm font-black uppercase tracking-wide text-white transition hover:bg-safetyDark"
+            >
+              Aceptar y Continuar
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-7xl rounded-[28px] border border-slate-300 bg-paper shadow-sheet">
         <header className="border-b-2 border-slate-500">
           <div className="grid min-h-24 grid-cols-[1fr_2fr_1fr] items-stretch text-center text-xs font-bold uppercase md:text-sm">
