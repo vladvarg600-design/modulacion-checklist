@@ -75,6 +75,8 @@ function App() {
   const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
   const [uploadingPointId, setUploadingPointId] = useState(null);
   const [uploadingMap, setUploadingMap] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [selectedSessionId, setSelectedSessionId] = useState('new');
   const [sharpLookup, setSharpLookup] = useState({ loading: false, message: '' });
   const [metadata, setMetadata] = useState({
     fecha: new Date().toISOString().slice(0, 10),
@@ -161,8 +163,43 @@ function App() {
   );
 
   useEffect(() => {
+    if (!metadata.fecha || !metadata.turno || !metadata.modo || !metadata.maquinaId) return;
+
+    const controller = new AbortController();
+    const loadSessions = async () => {
+      try {
+        const search = new URLSearchParams({
+          fecha: metadata.fecha,
+          turno: metadata.turno,
+          modo: metadata.modo,
+          maquinaId: metadata.maquinaId,
+        });
+        const response = await fetch(`${API_URL}/api/sessions?${search.toString()}`, { signal: controller.signal });
+        if (response.ok) {
+          const payload = await response.json();
+          setSessions(payload.sessions || []);
+          setSelectedSessionId('new');
+        }
+      } catch (error) {}
+    };
+    loadSessions();
+    return () => controller.abort();
+  }, [metadata.fecha, metadata.turno, metadata.modo, metadata.maquinaId]);
+
+  useEffect(() => {
     if (!filteredPoints.length || !config.checks.length || !metadata.maquinaId) {
       setCheckState({});
+      return;
+    }
+
+    if (selectedSessionId === 'new') {
+      setCheckState({});
+      setMetadata((current) => ({
+        ...current,
+        numeroSharp: '',
+        firmaOperador: '',
+        firmaSupervisor: '',
+      }));
       return;
     }
 
@@ -179,9 +216,7 @@ function App() {
         }));
 
         const search = new URLSearchParams({
-          fecha: metadata.fecha,
-          turno: metadata.turno,
-          modo: metadata.modo,
+          sessionId: selectedSessionId,
           maquinaId: metadata.maquinaId,
         });
         const response = await fetch(`${API_URL}/api/checklist?${search.toString()}`, { signal: controller.signal });
@@ -214,7 +249,7 @@ function App() {
     loadExistingChecklist();
 
     return () => controller.abort();
-  }, [config.checks, filteredPoints, metadata.fecha, metadata.turno, metadata.modo, metadata.maquinaId]);
+  }, [config.checks, filteredPoints, metadata.maquinaId, selectedSessionId]);
 
   const groupedChecks = useMemo(() => {
     const parada = config.checks.filter((check) => check.grupo === 'parada');
@@ -371,6 +406,12 @@ function App() {
     }
   };
 
+  const generateSessionId = () => {
+    return typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sess-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  };
+
   const handleSubmit = async () => {
     if (!metadata.turno.trim()) {
       setStatus((current) => ({ ...current, error: 'El turno es obligatorio' }));
@@ -399,6 +440,8 @@ function App() {
 
     setStatus({ loading: false, saving: true, message: '', error: '' });
 
+    const sessionIdToSave = selectedSessionId === 'new' ? generateSessionId() : selectedSessionId;
+
     try {
       const rows = filteredPoints.flatMap((punto) =>
         config.checks.map((check) => ({
@@ -414,6 +457,7 @@ function App() {
         body: JSON.stringify({
           ...metadata,
           maquinaId: Number(metadata.maquinaId),
+          sessionId: sessionIdToSave,
           rows,
         }),
       });
@@ -428,6 +472,14 @@ function App() {
         usuario: metadata.firmaOperador,
       });
       setStatus({ loading: false, saving: false, message: '', error: '' });
+
+      if (selectedSessionId === 'new') {
+        setSessions((prev) => [
+          { session_id: sessionIdToSave, created_at: new Date().toISOString(), firma_operador: metadata.firmaOperador },
+          ...prev
+        ]);
+        setSelectedSessionId(sessionIdToSave);
+      }
     } catch (error) {
       setStatus({ loading: false, saving: false, message: '', error: error.message });
     }
@@ -595,7 +647,7 @@ function App() {
 
         <section className="border-b-2 border-slate-500">
           <div className="border-b border-slate-500 px-3 py-2 text-sm font-black uppercase">Registro de produccion</div>
-          <div className="grid gap-4 px-3 py-4 md:grid-cols-3">
+          <div className="grid gap-4 px-3 py-4 md:grid-cols-4">
             <label className="text-xs font-bold uppercase text-slate-700">
               Fecha
               <input
@@ -620,6 +672,21 @@ function App() {
               </select>
             </label>
             <label className="text-xs font-bold uppercase text-slate-700">
+              Historial del Turno
+              <select
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm font-semibold text-safety outline-none"
+              >
+                <option value="new">+ Nuevo Registro</option>
+                {sessions.map((s) => (
+                  <option key={s.session_id} value={s.session_id}>
+                    {new Date(s.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })} - {s.firma_operador}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-bold uppercase text-slate-700">
               Numero Sharp
               <input
                 name="numeroSharp"
@@ -632,7 +699,7 @@ function App() {
                 className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
               />
             </label>
-            <label className="text-xs font-bold uppercase text-slate-700">
+            <label className="text-xs font-bold uppercase text-slate-700 md:col-span-2">
               Firma
               <input
                 name="firmaOperador"

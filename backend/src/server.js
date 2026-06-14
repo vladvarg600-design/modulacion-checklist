@@ -117,12 +117,41 @@ app.get('/api/config', async (_request, response) => {
   }
 });
 
-app.get('/api/checklist', async (request, response) => {
+app.get('/api/sessions', async (request, response) => {
   const { fecha, turno, modo, maquinaId } = request.query;
   const resolvedMachineId = Number(maquinaId);
 
   if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0) {
     response.status(400).json({ message: 'fecha, turno, modo y maquinaId son obligatorios' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT session_id, MIN(created_at) as created_at, MAX(firma_operador) as firma_operador
+        FROM registros_checklist
+        WHERE fecha = $1 AND turno = $2 AND modo = $3 AND maquina_id = $4 AND session_id IS NOT NULL
+        GROUP BY session_id
+        ORDER BY created_at DESC
+      `,
+      [fecha, turno, modo, resolvedMachineId]
+    );
+    response.json({ sessions: result.rows });
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/checklist', async (request, response) => {
+  const { sessionId, maquinaId } = request.query;
+  const resolvedMachineId = Number(maquinaId);
+
+  if (!sessionId || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0) {
+    response.json({
+      metadata: { numeroSharp: '', opNumero: '', firmaOperador: '', firmaSupervisor: '' },
+      registros: [],
+    });
     return;
   }
 
@@ -147,18 +176,18 @@ app.get('/api/checklist', async (request, response) => {
         JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
         JOIN tipos_check tc ON tc.id = rc.check_id
         LEFT JOIN responsables_sharp rs ON rs.numero_sharp = rc.numero_sharp
-        WHERE rc.fecha = $1 AND rc.turno = $2 AND rc.modo = $3 AND rc.maquina_id = $4
+        WHERE rc.session_id = $1 AND rc.maquina_id = $2
         ORDER BY pa.orden ASC, tc.orden ASC
       `,
-      [fecha, turno, modo, resolvedMachineId],
+      [sessionId, resolvedMachineId],
     );
 
     const metadataSource = result.rows[0] || null;
 
     response.json({
-      fecha,
-      turno,
-      modo,
+      fecha: metadataSource?.fecha || '',
+      turno: metadataSource?.turno || '',
+      modo: metadataSource?.modo || '',
       metadata: metadataSource
         ? {
             numeroSharp: metadataSource.numero_sharp ?? '',
@@ -220,7 +249,7 @@ app.get('/api/sharp/:numeroSharp', async (request, response) => {
 });
 
 app.post('/api/checklist', async (request, response) => {
-  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, rows } = request.body;
+  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, sessionId, rows } = request.body;
   const resolvedMachineId = Number(maquinaId);
   const resolvedNumeroSharp =
     numeroSharp === '' || numeroSharp === null || numeroSharp === undefined
@@ -229,6 +258,11 @@ app.post('/api/checklist', async (request, response) => {
 
   if (!fecha || !turno || !modo || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0 || !Array.isArray(rows) || rows.length === 0) {
     response.status(400).json({ message: 'fecha, turno, modo, maquinaId y rows son obligatorios' });
+    return;
+  }
+
+  if (!sessionId) {
+    response.status(400).json({ message: 'sessionId es obligatorio' });
     return;
   }
 
@@ -268,19 +302,19 @@ app.post('/api/checklist', async (request, response) => {
     const params = [];
 
     rows.forEach((row, index) => {
-      const baseIndex = index * 11;
-      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.nombre_completo, sharpOwner.lider_nombre);
+      const baseIndex = index * 12;
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.nombre_completo, sharpOwner.lider_nombre, sessionId);
       values.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11})`,
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12})`,
       );
     });
 
     await client.query(
       `
         INSERT INTO registros_checklist
-          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, numero_sharp, op_numero, firma_operador, firma_supervisor)
+          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, numero_sharp, op_numero, firma_operador, firma_supervisor, session_id)
         VALUES ${values.join(', ')}
-        ON CONFLICT (fecha, turno, modo, maquina_id, punto_id, check_id)
+        ON CONFLICT (session_id, maquina_id, punto_id, check_id)
         DO UPDATE SET
           valor = EXCLUDED.valor,
           numero_sharp = EXCLUDED.numero_sharp,
