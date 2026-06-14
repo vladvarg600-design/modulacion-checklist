@@ -603,6 +603,7 @@ function App() {
               <div className="text-2xl font-black italic text-safetyDark">VPO</div>
               <span>APP-MA-VPOE-J-002</span>
             </div>
+        </div>
         </header>
 
         <div className="flex border-b border-slate-500 bg-slate-100 text-sm font-black uppercase text-slate-600">
