@@ -173,7 +173,8 @@ app.get('/api/historial', async (request, response) => {
         pa.descripcion AS punto_descripcion,
         tc.descripcion_corta AS check_nombre,
         rc.firma_operador,
-        rc.firma_supervisor
+        rc.firma_supervisor,
+        rc.observacion
       FROM registros_checklist rc
       JOIN maquinas m ON m.id = rc.maquina_id
       JOIN puntos_aislamiento pa ON pa.id = rc.punto_id
@@ -202,7 +203,7 @@ app.get('/api/checklist', async (request, response) => {
 
   if (!sessionId || !Number.isInteger(resolvedMachineId) || resolvedMachineId <= 0) {
     response.json({
-      metadata: { numeroSharp: '', opNumero: '', firmaOperador: '', firmaSupervisor: '' },
+      metadata: { numeroSharp: '', opNumero: '', firmaOperador: '', firmaSupervisor: '', observacion: '' },
       registros: [],
     });
     return;
@@ -223,6 +224,7 @@ app.get('/api/checklist', async (request, response) => {
           rc.op_numero,
           COALESCE(rs.nombre_completo, rc.firma_operador) AS firma_operador,
           COALESCE(rs.lider_nombre, rc.firma_supervisor) AS firma_supervisor,
+          rc.observacion,
           pa.id_visual,
           tc.descripcion_corta
         FROM registros_checklist rc
@@ -247,12 +249,14 @@ app.get('/api/checklist', async (request, response) => {
             opNumero: metadataSource.op_numero || '',
             firmaOperador: metadataSource.firma_operador || '',
             firmaSupervisor: metadataSource.firma_supervisor || '',
+            observacion: metadataSource.observacion || '',
           }
         : {
             numeroSharp: '',
             opNumero: '',
             firmaOperador: '',
             firmaSupervisor: '',
+            observacion: '',
           },
       registros: result.rows,
     });
@@ -302,7 +306,7 @@ app.get('/api/sharp/:numeroSharp', async (request, response) => {
 });
 
 app.post('/api/checklist', async (request, response) => {
-  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, sessionId, rows } = request.body;
+  const { fecha, turno, modo, maquinaId, numeroSharp, opNumero, sessionId, observacion, rows } = request.body;
   const resolvedMachineId = Number(maquinaId);
   const resolvedNumeroSharp =
     numeroSharp === '' || numeroSharp === null || numeroSharp === undefined
@@ -355,17 +359,17 @@ app.post('/api/checklist', async (request, response) => {
     const params = [];
 
     rows.forEach((row, index) => {
-      const baseIndex = index * 12;
-      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.nombre_completo, sharpOwner.lider_nombre, sessionId);
+      const baseIndex = index * 13;
+      params.push(fecha, turno, modo, resolvedMachineId, row.puntoId, row.checkId, row.valor, resolvedNumeroSharp, opNumero || '', sharpOwner.nombre_completo, sharpOwner.lider_nombre, sessionId, observacion || '');
       values.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12})`,
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12}, $${baseIndex + 13})`,
       );
     });
 
     await client.query(
       `
         INSERT INTO registros_checklist
-          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, numero_sharp, op_numero, firma_operador, firma_supervisor, session_id)
+          (fecha, turno, modo, maquina_id, punto_id, check_id, valor, numero_sharp, op_numero, firma_operador, firma_supervisor, session_id, observacion)
         VALUES ${values.join(', ')}
         ON CONFLICT (session_id, maquina_id, punto_id, check_id)
         DO UPDATE SET
@@ -374,6 +378,7 @@ app.post('/api/checklist', async (request, response) => {
           op_numero = EXCLUDED.op_numero,
           firma_operador = EXCLUDED.firma_operador,
           firma_supervisor = EXCLUDED.firma_supervisor,
+          observacion = EXCLUDED.observacion,
           updated_at = NOW()
       `,
       params,

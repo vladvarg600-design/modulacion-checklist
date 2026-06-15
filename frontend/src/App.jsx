@@ -94,6 +94,7 @@ function App() {
     numeroSharp: '',
     firmaOperador: '',
     firmaSupervisor: '',
+    observacion: '',
   });
   const [checkState, setCheckState] = useState({});
   const [status, setStatus] = useState({ loading: true, saving: false, message: '', error: '' });
@@ -245,6 +246,7 @@ function App() {
         numeroSharp: '',
         firmaOperador: '',
         firmaSupervisor: '',
+        observacion: '',
       }));
       return;
     }
@@ -259,6 +261,7 @@ function App() {
           numeroSharp: '',
           firmaOperador: '',
           firmaSupervisor: '',
+          observacion: '',
         }));
 
         const search = new URLSearchParams({
@@ -284,6 +287,7 @@ function App() {
           numeroSharp: payload.metadata.numeroSharp,
           firmaOperador: payload.metadata.firmaOperador,
           firmaSupervisor: payload.metadata.firmaSupervisor,
+          observacion: payload.metadata.observacion || '',
         }));
       } catch (error) {
         if (error.name !== 'AbortError') {
@@ -461,7 +465,7 @@ function App() {
   const handleDownloadCSV = () => {
     if (!historyRecords.length) return;
 
-    const headers = ['Fecha Turno', 'Fecha Subida', 'Maquina', 'Punto', 'Descripcion del Punto', 'Check', 'Operador'];
+    const headers = ['Fecha Turno', 'Fecha Subida', 'Maquina', 'Punto', 'Descripcion del Punto', 'Check', 'Operador', 'Observacion'];
     const rows = historyRecords.map(r => [
       r.fecha ? new Date(r.fecha).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '',
       new Date(r.updated_at || r.created_at).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
@@ -469,7 +473,8 @@ function App() {
       r.id_visual,
       r.punto_descripcion,
       r.check_nombre,
-      r.firma_operador
+      r.firma_operador,
+      r.observacion || ''
     ]);
 
     const csvContent = [
@@ -808,6 +813,16 @@ function App() {
                 className="mt-1 w-full border-0 border-b border-slate-500 bg-slate-50 px-0 py-2 text-sm outline-none"
               />
             </label>
+            <label className="text-xs font-bold uppercase text-slate-700 md:col-span-4">
+              Observaciones / Notas
+              <input
+                name="observacion"
+                value={metadata.observacion}
+                onChange={handleMetadataChange}
+                placeholder="Escribe alguna novedad u observacion..."
+                className="mt-1 w-full border-0 border-b border-slate-500 bg-transparent px-0 py-2 text-sm outline-none"
+              />
+            </label>
           </div>
           {sharpLookup.loading && (
             <p className="px-3 pb-3 text-xs font-semibold text-slate-500">
@@ -1039,16 +1054,17 @@ function App() {
                     <th className="px-4 py-3 font-bold">Descripcion</th>
                     <th className="px-4 py-3 font-bold">Check</th>
                     <th className="px-4 py-3 font-bold">Operador</th>
+                    <th className="px-4 py-3 font-bold">Observacion</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {historyLoading ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center font-semibold text-slate-500">Cargando historial...</td>
+                      <td colSpan="8" className="px-4 py-8 text-center font-semibold text-slate-500">Cargando historial...</td>
                     </tr>
                   ) : historyRecords.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center font-semibold text-slate-500">No se encontraron registros de novedades (True) para estos filtros.</td>
+                      <td colSpan="8" className="px-4 py-8 text-center font-semibold text-slate-500">No se encontraron registros de novedades (True) para estos filtros.</td>
                     </tr>
                   ) : (
                     historyRecords.map((r, i) => (
@@ -1060,6 +1076,7 @@ function App() {
                         <td className="px-4 py-3">{r.punto_descripcion}</td>
                         <td className="px-4 py-3 font-semibold text-safety">{r.check_nombre}</td>
                         <td className="px-4 py-3">{r.firma_operador}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.observacion}</td>
                       </tr>
                     ))
                   )}
