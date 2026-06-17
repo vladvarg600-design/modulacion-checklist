@@ -61,7 +61,7 @@ function LazyImage({ src, alt, fallbackLabel, badgeColor, className }) {
   return (
     <div ref={wrapperRef} className={className}>
       {visible ? (
-        <img src={resolvedSrc} alt={alt} loading="lazy" className="h-full w-full object-cover" />
+        <img src={resolvedSrc} alt={alt} loading="lazy" className="h-auto w-full object-contain" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-bold text-slate-600">
           Cargando imagen...
@@ -856,7 +856,7 @@ function App() {
                       alt={`Foto referencial ${punto.id_visual}`}
                       fallbackLabel={punto.id_visual}
                       badgeColor={punto.color_hex}
-                      className="aspect-[1/1] w-full bg-slate-100"
+                    className="w-full bg-slate-100"
                     />
                     <label
                       className="absolute right-3 top-3 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
@@ -918,53 +918,73 @@ function App() {
               ))}
             </div>
             <div
-              className="relative min-h-[480px] overflow-hidden rounded-[24px] border border-slate-300 bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] p-4"
+              className="relative min-h-[480px] w-full overflow-hidden rounded-[24px] border border-slate-300 bg-slate-50"
               style={selectedMachine?.mapa_url ? {
-                backgroundImage: `linear-gradient(rgba(248,250,252,0.22), rgba(226,232,240,0.30)), url(${selectedMachine.mapa_url})`,
-                backgroundSize: 'cover',
+                backgroundImage: `url(${selectedMachine.mapa_url})`,
+                backgroundSize: 'contain',
                 backgroundPosition: 'center',
-              } : undefined}
+                backgroundRepeat: 'no-repeat',
+              } : {
+                backgroundImage: 'linear-gradient(135deg,#f8fafc,#e2e8f0)'
+              }}
             >
-              <div className="relative z-10 mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-700">
-                  {selectedMachine?.mapa_url ? 'Mapa cargado para esta maquina' : 'Sube el mapa de esta maquina'}
-                </p>
-                <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white/85 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-white">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    disabled={uploadingMap || !metadata.maquinaId}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
+              <label
+                className="absolute right-4 top-4 z-30 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+                title={uploadingMap ? 'Subiendo mapa...' : 'Subir mapa'}
+              >
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={uploadingMap || !metadata.maquinaId}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
 
-                      if (file) {
-                        handleMapUpload(file);
-                      }
+                    if (file) {
+                      handleMapUpload(file);
+                    }
 
-                      event.target.value = '';
-                    }}
-                  />
-                  {uploadingMap ? 'Subiendo mapa...' : 'Subir mapa'}
-                </label>
-              </div>
-              <div className="absolute inset-0 opacity-40" style={{
-                backgroundImage:
-                  'linear-gradient(90deg, rgba(148,163,184,0.4) 1px, transparent 1px), linear-gradient(rgba(148,163,184,0.4) 1px, transparent 1px)',
-                backgroundSize: '32px 32px',
-              }} />
-              <div className="relative z-10 h-full rounded-[18px] border border-dashed border-slate-400 bg-white/60 backdrop-blur-[1px]">
-                <div className="absolute left-[18%] top-[10%] h-[75%] w-[12%] rounded-full border border-slate-400 bg-slate-100/90" />
-                <div className="absolute left-[37%] top-[6%] h-[84%] w-[10%] rounded-full border border-slate-400 bg-slate-100/90" />
-                <div className="absolute left-[56%] top-[18%] h-[64%] w-[11%] rounded-full border border-slate-400 bg-slate-100/90" />
-                <div className="absolute left-[74%] top-[22%] h-[52%] w-[9%] rounded-full border border-slate-400 bg-slate-100/90" />
+                    event.target.value = '';
+                  }}
+                />
+                {uploadingMap ? (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 animate-spin">
+                    <path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+                    <path d="M12 16V7m0 0-3.5 3.5M12 7l3.5 3.5M5 17.5V19h14v-1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </label>
+              {!selectedMachine?.mapa_url && (
+                <>
+                  <div className="absolute left-4 top-4 z-20">
+                    <p className="rounded-lg bg-white/70 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 backdrop-blur-sm">
+                      Sube el mapa de esta maquina
+                    </p>
+                  </div>
+                  <div className="absolute inset-0 opacity-40 pointer-events-none" style={{
+                    backgroundImage:
+                      'linear-gradient(90deg, rgba(148,163,184,0.4) 1px, transparent 1px), linear-gradient(rgba(148,163,184,0.4) 1px, transparent 1px)',
+                    backgroundSize: '32px 32px',
+                  }} />
+                  <div className="absolute inset-4 z-10 rounded-[18px] border border-dashed border-slate-400 bg-white/60 backdrop-blur-[1px] pointer-events-none">
+                    <div className="absolute left-[18%] top-[10%] h-[75%] w-[12%] rounded-full border border-slate-400 bg-slate-100/90" />
+                    <div className="absolute left-[37%] top-[6%] h-[84%] w-[10%] rounded-full border border-slate-400 bg-slate-100/90" />
+                    <div className="absolute left-[56%] top-[18%] h-[64%] w-[11%] rounded-full border border-slate-400 bg-slate-100/90" />
+                    <div className="absolute left-[74%] top-[22%] h-[52%] w-[9%] rounded-full border border-slate-400 bg-slate-100/90" />
+                  </div>
+                </>
+              )}
+              <div className="absolute inset-4 z-20 pointer-events-none">
                 {filteredPoints.map((punto, index) => {
                   const fallbackPosition = getFallbackMarkerPosition(index, filteredPoints.length);
 
                   return (
                     <span
                       key={`marker-${punto.id}`}
-                      className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1 text-xs font-black uppercase text-white shadow-lg"
+                      className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1 text-xs font-black uppercase text-white shadow-lg pointer-events-auto cursor-default"
                       style={{
                         left: `${punto.blueprint_x ?? fallbackPosition.left}%`,
                         top: `${punto.blueprint_y ?? fallbackPosition.top}%`,
