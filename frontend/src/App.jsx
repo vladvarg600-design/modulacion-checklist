@@ -2,18 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-const getFallbackMarkerPosition = (index, total) => {
-  const columns = total > 9 ? 4 : total > 4 ? 3 : 2;
-  const rows = Math.max(1, Math.ceil(total / columns));
-  const columnIndex = index % columns;
-  const rowIndex = Math.floor(index / columns);
-
-  return {
-    left: 18 + ((columnIndex + 0.5) * 64) / columns,
-    top: 18 + ((rowIndex + 0.5) * 58) / rows,
-  };
-};
-
 const createPlaceholderDataUri = (label, color) => {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
@@ -977,25 +965,6 @@ function App() {
                   </div>
                 </>
               )}
-              <div className="absolute inset-4 z-20 pointer-events-none">
-                {filteredPoints.map((punto, index) => {
-                  const fallbackPosition = getFallbackMarkerPosition(index, filteredPoints.length);
-
-                  return (
-                    <span
-                      key={`marker-${punto.id}`}
-                      className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1 text-xs font-black uppercase text-white shadow-lg pointer-events-auto cursor-default"
-                      style={{
-                        left: `${punto.blueprint_x ?? fallbackPosition.left}%`,
-                        top: `${punto.blueprint_y ?? fallbackPosition.top}%`,
-                        backgroundColor: punto.color_hex,
-                      }}
-                    >
-                      {punto.id_visual}
-                    </span>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </section>
