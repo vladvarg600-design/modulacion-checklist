@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
 import pg from 'pg';
+import { get as cacheGet, getOrRefill as cacheGetOrRefill } from './cache.js';
 
 const { Pool } = pg;
 
@@ -27,6 +28,7 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('render.com')
     ? { rejectUnauthorized: false }
     : false,
+  min: 1,
 });
 
 const allowedOrigins = (process.env.CORS_ORIGIN ?? '')
@@ -36,6 +38,78 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? '')
 
 const isCloudflarePreview = (origin) =>
   /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.modulacion-checklist\.pages\.dev$/.test(origin);
+
+const withQueryTiming = async (label, queryPromise) => {
+  const startedAt = process.hrtime.bigint();
+  const result = await queryPromise;
+  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+  console.log(`[PERF] ${label} ms=${durationMs.toFixed(2)}`);
+  return result;
+};
+
+const CONFIG_CACHE_TTL_MS = 60_000;
+const CONFIG_CACHE_KEY = 'config';
+
+const buildConfigPayload = async () => {
+  const queriesStartedAt = process.hrtime.bigint();
+  const [machinesResult, pointsResult, checksResult] = await Promise.all([
+    withQueryTiming(
+      'Q1 maquinas',
+      pool.query(
+        `
+          SELECT id, nombre, linea, orden
+          FROM maquinas
+          ORDER BY linea ASC, orden ASC
+        `,
+      ),
+    ),
+    withQueryTiming(
+      'Q2 puntos_aislamiento',
+      pool.query(
+        `
+          SELECT
+            pa.id,
+            pa.maquina_id,
+            pa.id_visual,
+            pa.descripcion,
+            pa.orden,
+            pa.blueprint_x,
+            pa.blueprint_y,
+            pa.color_hex,
+            m.nombre AS maquina_nombre,
+            m.linea
+          FROM puntos_aislamiento pa
+          JOIN maquinas m ON m.id = pa.maquina_id
+          ORDER BY m.linea ASC, m.orden ASC, pa.orden ASC
+        `,
+      ),
+    ),
+    withQueryTiming(
+      'Q3 tipos_check',
+      pool.query(
+        `
+          SELECT id, nombre, orden, grupo, descripcion_corta
+          FROM tipos_check
+          ORDER BY orden ASC
+        `,
+      ),
+    ),
+  ]);
+  const queriesDurationMs = Number(process.hrtime.bigint() - queriesStartedAt) / 1e6;
+
+  const payload = {
+    lineas: [...new Set(machinesResult.rows.map((machine) => machine.linea))],
+    maquinas: machinesResult.rows,
+    puntos: pointsResult.rows,
+    checks: checksResult.rows,
+  };
+
+  console.log(
+    `[PERF] GET /api/config cache=miss queries_ms=${queriesDurationMs.toFixed(2)} rows=${machinesResult.rows.length + pointsResult.rows.length + checksResult.rows.length} payload_bytes=${Buffer.byteLength(JSON.stringify(payload))}`,
+  );
+
+  return payload;
+};
 
 app.use(
   cors({
@@ -75,58 +149,40 @@ app.use((error, _request, response, next) => {
 });
 
 app.get('/api/health', async (_request, response) => {
+  const startedAt = process.hrtime.bigint();
+
   try {
     await pool.query('SELECT 1');
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    console.log(`[PERF] GET /api/health select1_ms=${durationMs.toFixed(2)} ok=true`);
     response.json({ ok: true });
   } catch (error) {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    console.log(`[PERF] GET /api/health select1_ms=${durationMs.toFixed(2)} ok=false error=${error.message}`);
     response.status(500).json({ ok: false, message: error.message });
   }
 });
 
 app.get('/api/config', async (_request, response) => {
-  try {
-    const [machinesResult, pointsResult, checksResult] = await Promise.all([
-      pool.query(
-        `
-          SELECT id, nombre, linea, orden
-          FROM maquinas
-          ORDER BY linea ASC, orden ASC
-        `,
-      ),
-      pool.query(
-        `
-          SELECT
-            pa.id,
-            pa.maquina_id,
-            pa.id_visual,
-            pa.descripcion,
-            pa.orden,
-            pa.blueprint_x,
-            pa.blueprint_y,
-            pa.color_hex,
-            m.nombre AS maquina_nombre,
-            m.linea
-          FROM puntos_aislamiento pa
-          JOIN maquinas m ON m.id = pa.maquina_id
-          ORDER BY m.linea ASC, m.orden ASC, pa.orden ASC
-        `,
-      ),
-      pool.query(
-        `
-          SELECT id, nombre, orden, grupo, descripcion_corta
-          FROM tipos_check
-          ORDER BY orden ASC
-        `,
-      ),
-    ]);
+  const handlerStartedAt = process.hrtime.bigint();
+  const cachedPayload = cacheGet(CONFIG_CACHE_KEY);
 
-    response.json({
-      lineas: [...new Set(machinesResult.rows.map((machine) => machine.linea))],
-      maquinas: machinesResult.rows,
-      puntos: pointsResult.rows,
-      checks: checksResult.rows,
-    });
+  if (cachedPayload !== undefined) {
+    const handlerDurationMs = Number(process.hrtime.bigint() - handlerStartedAt) / 1e6;
+    response.json(cachedPayload);
+    console.log(
+      `[PERF] GET /api/config cache=hit total_ms=${handlerDurationMs.toFixed(2)} queries_ms=0.00 payload_bytes=${Buffer.byteLength(JSON.stringify(cachedPayload))}`,
+    );
+    return;
+  }
+
+  try {
+    const payload = await cacheGetOrRefill(CONFIG_CACHE_KEY, CONFIG_CACHE_TTL_MS, buildConfigPayload);
+
+    response.json(payload);
   } catch (error) {
+    const handlerDurationMs = Number(process.hrtime.bigint() - handlerStartedAt) / 1e6;
+    console.log(`[PERF] GET /api/config cache=miss total_ms=${handlerDurationMs.toFixed(2)} error=${error.message}`);
     response.status(500).json({ message: error.message });
   }
 });
