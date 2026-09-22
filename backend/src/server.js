@@ -29,9 +29,24 @@ const pool = new Pool({
     : false,
 });
 
+const allowedOrigins = (process.env.CORS_ORIGIN ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const isCloudflarePreview = (origin) =>
+  /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.modulacion-checklist\.pages\.dev$/.test(origin);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()) || '*',
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, allowedOrigins.includes(origin) || isCloudflarePreview(origin));
+    },
   }),
 );
 app.use(express.json({ limit: '1mb' }));
