@@ -61,6 +61,9 @@ function LazyImage({ src, alt, fallbackLabel, badgeColor, className }) {
 
 function App() {
   const [config, setConfig] = useState({ lineas: [], maquinas: [], puntos: [], checks: [] });
+  const [recursos, setRecursos] = useState({});
+  const recursosCache = useRef(new Map());
+  const recursosLocalOverrides = useRef(new Map());
   const [uploadingPointId, setUploadingPointId] = useState(null);
   const [uploadingMap, setUploadingMap] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -166,10 +169,76 @@ function App() {
     [config.maquinas, metadata.maquinaId],
   );
 
+  const selectedMachineRecursos = recursos[metadata.maquinaId];
+
   const filteredPoints = useMemo(
     () => config.puntos.filter((punto) => String(punto.maquina_id) === metadata.maquinaId),
     [config.puntos, metadata.maquinaId],
   );
+
+  useEffect(() => {
+    if (!metadata.maquinaId) {
+      return;
+    }
+
+    const machineId = metadata.maquinaId;
+
+    const cached = recursosCache.current.get(machineId);
+    if (cached) {
+      setRecursos((current) => (current[machineId] ? current : { ...current, [machineId]: cached }));
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const mergeLocalOverrides = (targetMachineId, base) => {
+      const overrides = recursosLocalOverrides.current.get(targetMachineId);
+
+      if (!overrides) {
+        return base;
+      }
+
+      return {
+        mapUrl: overrides.mapUrl !== undefined ? overrides.mapUrl : base.mapUrl,
+        fotos: { ...base.fotos, ...overrides.fotos },
+      };
+    };
+
+    const loadRecursos = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/maquinas/${machineId}/recursos`, { signal: controller.signal });
+
+        if (!response.ok) {
+          throw new Error('No se pudieron cargar los recursos de la maquina');
+        }
+
+        const payload = await response.json();
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const baseEntry = {
+          mapUrl: payload.mapa_url ?? '',
+          fotos: Object.fromEntries(payload.puntos.map((punto) => [String(punto.puntoId), punto.foto_url ?? ''])),
+        };
+        const entry = mergeLocalOverrides(machineId, baseEntry);
+
+        recursosCache.current.set(machineId, entry);
+        setRecursos((current) => ({ ...current, [machineId]: entry }));
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setStatus((current) => ({ ...current, error: error.message }));
+        }
+      }
+    };
+
+    loadRecursos();
+
+    return () => {
+      controller.abort();
+    };
+  }, [metadata.maquinaId]);
 
   useEffect(() => {
     if (!metadata.fecha || !metadata.turno || !metadata.modo || !metadata.maquinaId) return;
@@ -389,14 +458,25 @@ function App() {
         throw new Error(payload.message || 'No se pudo subir la imagen');
       }
 
-      setConfig((current) => ({
-        ...current,
-        puntos: current.puntos.map((punto) => (
-          punto.id === pointId
-            ? { ...punto, foto_url: payload.point.foto_url }
-            : punto
-        )),
-      }));
+      const machineId = metadata.maquinaId;
+      const pointKey = String(pointId);
+
+      setRecursos((current) => {
+        const entry = current[machineId];
+        const nextEntry = entry
+          ? { ...entry, fotos: { ...entry.fotos, [pointKey]: payload.point.foto_url } }
+          : { mapUrl: '', fotos: { [pointKey]: payload.point.foto_url } };
+
+        recursosCache.current.set(machineId, nextEntry);
+        return { ...current, [machineId]: nextEntry };
+      });
+
+      const previousOverrides = recursosLocalOverrides.current.get(machineId) || { fotos: {} };
+      recursosLocalOverrides.current.set(machineId, {
+        ...previousOverrides,
+        fotos: { ...previousOverrides.fotos, [pointKey]: payload.point.foto_url },
+      });
+
       setStatus((current) => ({ ...current, message: payload.message, error: '' }));
     } catch (error) {
       setStatus((current) => ({ ...current, message: '', error: error.message }));
@@ -428,14 +508,24 @@ function App() {
         throw new Error(payload.message || 'No se pudo subir el mapa');
       }
 
-      setConfig((current) => ({
-        ...current,
-        maquinas: current.maquinas.map((machine) => (
-          machine.id === payload.machine.id
-            ? { ...machine, mapa_url: payload.machine.mapa_url }
-            : machine
-        )),
-      }));
+      const machineId = metadata.maquinaId;
+
+      setRecursos((current) => {
+        const entry = current[machineId];
+        const nextEntry = entry
+          ? { ...entry, mapUrl: payload.machine.mapa_url }
+          : { mapUrl: payload.machine.mapa_url, fotos: {} };
+
+        recursosCache.current.set(machineId, nextEntry);
+        return { ...current, [machineId]: nextEntry };
+      });
+
+      const previousOverrides = recursosLocalOverrides.current.get(machineId) || { fotos: {} };
+      recursosLocalOverrides.current.set(machineId, {
+        ...previousOverrides,
+        mapUrl: payload.machine.mapa_url,
+      });
+
       setStatus((current) => ({ ...current, message: payload.message, error: '' }));
     } catch (error) {
       setStatus((current) => ({ ...current, message: '', error: error.message }));
@@ -840,7 +930,7 @@ function App() {
                 <article key={`photo-${punto.id}`} className="self-start overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                   <div className="relative">
                     <LazyImage
-                      src={punto.foto_url}
+                      src={selectedMachineRecursos?.fotos[String(punto.id)] || ''}
                       alt={`Foto referencial ${punto.id_visual}`}
                       fallbackLabel={punto.id_visual}
                       badgeColor={punto.color_hex}
@@ -907,8 +997,8 @@ function App() {
             </div>
             <div
               className="relative min-h-[480px] w-full overflow-hidden rounded-[24px] border border-slate-300 bg-slate-50"
-              style={selectedMachine?.mapa_url ? {
-                backgroundImage: `url(${selectedMachine.mapa_url})`,
+              style={selectedMachineRecursos?.mapUrl ? {
+                backgroundImage: `url(${selectedMachineRecursos.mapUrl})`,
                 backgroundSize: 'contain',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
@@ -945,7 +1035,7 @@ function App() {
                   </svg>
                 )}
               </label>
-              {!selectedMachine?.mapa_url && (
+              {!selectedMachineRecursos?.mapUrl && (
                 <>
                   <div className="absolute left-4 top-4 z-20">
                     <p className="rounded-lg bg-white/70 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 backdrop-blur-sm">

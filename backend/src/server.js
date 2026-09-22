@@ -73,7 +73,7 @@ app.get('/api/config', async (_request, response) => {
     const [machinesResult, pointsResult, checksResult] = await Promise.all([
       pool.query(
         `
-          SELECT id, nombre, linea, mapa_url, orden
+          SELECT id, nombre, linea, orden
           FROM maquinas
           ORDER BY linea ASC, orden ASC
         `,
@@ -86,7 +86,6 @@ app.get('/api/config', async (_request, response) => {
             pa.id_visual,
             pa.descripcion,
             pa.orden,
-            pa.foto_url,
             pa.blueprint_x,
             pa.blueprint_y,
             pa.color_hex,
@@ -111,6 +110,55 @@ app.get('/api/config', async (_request, response) => {
       maquinas: machinesResult.rows,
       puntos: pointsResult.rows,
       checks: checksResult.rows,
+    });
+  } catch (error) {
+    response.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/maquinas/:machineId/recursos', async (request, response) => {
+  const machineId = Number(request.params.machineId);
+
+  if (!Number.isInteger(machineId) || machineId <= 0) {
+    response.status(400).json({ message: 'machineId debe ser un entero positivo' });
+    return;
+  }
+
+  try {
+    const [machineResult, pointsResult] = await Promise.all([
+      pool.query(
+        `
+          SELECT id, mapa_url
+          FROM maquinas
+          WHERE id = $1
+        `,
+        [machineId],
+      ),
+      pool.query(
+        `
+          SELECT id, maquina_id, foto_url
+          FROM puntos_aislamiento
+          WHERE maquina_id = $1
+          ORDER BY orden ASC
+        `,
+        [machineId],
+      ),
+    ]);
+
+    const machine = machineResult.rows[0];
+
+    if (!machine) {
+      response.status(404).json({ message: 'No se encontro la maquina seleccionada' });
+      return;
+    }
+
+    response.json({
+      maquinaId: machine.id,
+      mapa_url: machine.mapa_url ?? null,
+      puntos: pointsResult.rows.map((punto) => ({
+        puntoId: punto.id,
+        foto_url: punto.foto_url ?? null,
+      })),
     });
   } catch (error) {
     response.status(500).json({ message: error.message });
